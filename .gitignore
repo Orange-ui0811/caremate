@@ -32,7 +32,7 @@ data/*backup*/
 data/backend-investigation*/
 data/conversation-checks/
 data/frontend-checks/
-data/interview-notes*/
+data/*notes*/
 data/verification/
 data/publishing-local/
 architecture-learning-lab/validation/

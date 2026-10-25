@@ -111,7 +111,7 @@ def main(output, paired):
               f".\\.venv\\Scripts\\python.exe -m scripts.audit_context_semantics --output {output.as_posix()}",
               f".\\.venv\\Scripts\\python.exe -m scripts.audit_context_semantics --output {paired.as_posix()}",
               "```", "",
-              f"简历建议：构建{all_count}条、{min(turns)}～{max(turns)}轮合成长会话评测，覆盖{family_count}类场景、{arm_count}种上下文策略与{all_count*2*arm_count}次追问；建立含记忆维护的Token核算、调用失败分离和离线复算流程，定位实体更正、否定和时间更新中的记忆失效。",
+              f"实验摘要：构建{all_count}条、{min(turns)}～{max(turns)}轮合成长会话评测，覆盖{family_count}类场景、{arm_count}种上下文策略与{all_count*2*arm_count}次追问；建立含记忆维护的Token核算、调用失败分离和离线复算流程，定位实体更正、否定和时间更新中的记忆失效。",
               "不要将本轮写成摘要方案显著提高最终任务准确率，也不要将旧24条集上的指代规则通过率当成本轮最终任务指标。", ""]
     (output / "FINAL_SUMMARY.md").write_text("\n".join(lines), encoding="utf-8")
     print(json.dumps(status, ensure_ascii=False, indent=2))

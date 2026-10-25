@@ -1,18 +1,18 @@
 # 客小助 · CareMate
 
-基于 **LangGraph + LangChain** 的电商客服演示项目，将确定性业务流程与 ReAct 式工具 Agent 结合，覆盖知识检索、订单与售后咨询、人工确认、上下文管理和运行观测。
+基于 **LangGraph + LangChain** 的电商客服应用，将确定性业务流程与 ReAct 式工具 Agent 结合，覆盖知识检索、订单与售后咨询、人工确认、上下文管理和运行观测。
 
-本项目用于架构学习、功能复现与扩展展示。订单、商品、物流及部分售后查询使用模拟数据；工单写入实际数据库，退款入口创建表单和工单，不执行支付退款。
+订单、商品、物流及部分售后查询使用模拟数据；工单写入实际数据库，退款入口创建表单和工单，不执行支付退款。
 ## 从这里阅读
 
 | 你想了解什么 | 入口 |
 | --- | --- |
-| 面试官追问四个框架，快速定位实现 | **[问题 → 源码函数 → 行号速查](docs/interview/framework-source-map.md)** |
-| 完整讲解、指标口径与演示准备 | [面试与演示导航](docs/interview/README.md) |
-| Workflow、ReAct 与工具执行 | [架构详解](docs/interview/workflow-and-agent.md) |
-| 检索和拒答门控 | [RAG 与置信度](docs/interview/rag-and-confidence.md) |
-| 长对话、滑窗与摘要 | [上下文工程](docs/interview/context-engineering.md) |
-| 待审队列、知识反馈与主题分类 | [反馈与分类器](docs/interview/feedback-and-classifier.md) |
+| 理解四个框架的职责与实现 | **[框架源码索引](docs/architecture/source-map.md)** |
+| 模块设计、实现边界与验证方式 | [架构文档](docs/architecture/README.md) |
+| Workflow、ReAct 与工具执行 | [架构详解](docs/architecture/workflow-and-agent.md) |
+| 检索和拒答门控 | [RAG 与置信度](docs/architecture/rag-and-confidence.md) |
+| 长对话、滑窗与摘要 | [上下文工程](docs/architecture/context-engineering.md) |
+| 待审队列、知识反馈与主题分类 | [反馈与分类器](docs/architecture/feedback-and-classifier.md) |
 | 安装与本地运行 | [部署说明](DEPLOY.md) |
 
 ## 系统做什么
@@ -98,7 +98,7 @@ make test
 make help
 ```
 
-`make test` 执行项目测试；真实模型、检索与分类器评估另有前置条件，参见部署说明和面试文档。本文更新只验证文档链接与源码定位，不代表重新执行了全部测试或在线验收。
+`make test` 执行项目测试；真实模型、检索与分类器评估另有前置条件，参见部署说明和架构文档。测试运行与真实服务验收分开记录，具体环境和检查范围以运行结果为准。
 
 评估数字应与报告日期、样本范围、模型配置一起呈现。历史结果不等于当前请求的成功率；源码包含某功能也不等于已验证该功能的生产可靠性。
 
@@ -115,12 +115,12 @@ mcp_servers/      独立物流和售后服务
 scripts/          初始化、评估、训练与报表
 sql/              数据库初始化与迁移
 tests/            测试与测试数据
-docs/interview/   面试讲解及源码导航
+docs/architecture/   架构说明及源码索引
 ```
 
 
 ## 本次公开范围
 
-仓库包含应用源码、前端、MCP 服务、部署脚本、测试数据、示例知识和面试文档。真实配置、会话数据库、17 条脱敏问题及其衍生产物、日志、缓存、训练权重、本机评估归档和学习图谱快照未包含。相关报告需按文档在本机重新生成。
+仓库包含应用源码、前端、MCP 服务、部署脚本、测试数据、示例知识和架构文档。真实配置、会话数据库、本机会话语料及其衍生产物、日志、缓存、训练权重、本机评估归档和学习图谱快照未包含。相关报告需按文档在本机重新生成。
 
-面试定位实现请优先使用 [框架源码速查](docs/interview/framework-source-map.md)，该页面直接链接仓库中的实际函数。
+定位实现可使用 [框架源码索引](docs/architecture/source-map.md)，该页面直接链接仓库中的实际函数。

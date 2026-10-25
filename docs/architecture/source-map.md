@@ -1,14 +1,14 @@
-# 面试源码速查：LangChain、LangGraph、MCP 与 Langfuse
+# 框架源码索引：LangChain、LangGraph、MCP 与 Langfuse
 
-核对日期：2026-10-25。先用自己的话回答，再点击对应源码证明。此页只引用源码，不依赖本机数据库、会话或评估产物，适合作为 GitHub 展示入口。
+核对日期：2026-10-25。本页将模块职责、关键函数和实现边界对应到源码，覆盖 LangChain、LangGraph、MCP 与 Langfuse。
 
-链接的 `#L` 为本次核对的 GitHub 行号；代码变化后按函数名重新定位。面试前可在 GitHub 源码页按 `y` 转为提交固定链接，再选择要展示的行，避免分支变化使证据漂移。
+链接的 `#L` 为本次核对的 GitHub 行号；代码变化后按函数名重新定位。引用源码时可在 GitHub 源码页按 `y` 转为提交固定链接，再选择相关行，避免分支变化使证据漂移。
 
 ## 1. LangChain 如何组织模型、提示词、结构化结果与工具调用？
 
-口述：我用 LangChain 统一提示词、模型调用、结构化结果和工具消息。业务规则由项目定义，框架负责调用与组合机制。
+实现：项目用 LangChain 统一提示词、模型调用、结构化结果和工具消息。业务规则由项目定义，框架负责调用与组合机制。
 
-| 追问 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
 | --- | --- | --- | --- |
 | 模型在哪里创建？ | [get_chat_model](../../app/core/llm.py#L74) | 模型配置与 ChatOpenAI 封装 | 配置和兼容逻辑是项目代码 |
 | 提示词怎么填参数？ | [INTENT_CLASSIFY_PROMPT](../../app/core/prompts.py#L207) | ChatPromptTemplate、query/history | 业务分类规则由提示词内容定义 |
@@ -19,9 +19,9 @@
 
 ## 2. LangGraph 如何组织流程、状态、分支与 Agent 循环？
 
-口述：外层图规定业务路线与必要步骤；内层通过主模型和工具节点构成 ReAct 式循环。检查点负责状态保存，interrupt/resume 处理用户选择与确认。
+实现：外层图规定业务路线与必要步骤；内层通过主模型和工具节点构成 ReAct 式循环。检查点负责状态保存，interrupt/resume 处理用户选择与确认。
 
-| 追问 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
 | --- | --- | --- | --- |
 | 整体流程在哪里？ | [_builder](../../app/graph/build.py#L8) | StateGraph、add_node、固定边、条件边 | 图节点不等于独立 Agent |
 | 九类到五路线在哪里？ | [INTENT_TO_ROUTE](../../app/graph/routing.py#L7) | 意图到路线的固定映射 | 当前一次输出一个主意图 |
@@ -30,13 +30,13 @@
 | 什么时候停止？ | [should_continue](../../app/graph/routing.py#L30) | 无 tool_calls 或达到步数上限 | 达上限停止不代表成功，也无额外总结节点 |
 | 缺订单怎么办？ | [fetch_order](../../app/graph/nodes.py#L66) | 归属检查、interrupt 订单选择 | 恢复时节点会重跑，暂停前避免副作用 |
 | 状态怎么保存和恢复？ | [init_graph](../../app/graph/runtime.py#L33)、[resume_turn](../../app/graph/runtime.py#L158) | SQLite checkpointer、thread_id、Command(resume) | 检查点不自动保证外部写操作幂等 |
-| 新用户轮与工具循环的历史有何不同？ | [_new_turn_input](../../app/graph/runtime.py#L123) | 新轮恢复 MySQL 中已展示的对话；resume 保留中断状态 | 历史恢复与当前轮工具结果回传是两条逻辑 |
+| 新用户轮与工具循环的历史有何不同？ | [_new_turn_input](../../app/graph/runtime.py#L123) | 新轮恢复 MySQL 中已查看的对话；resume 保留中断状态 | 历史恢复与当前轮工具结果回传是两条逻辑 |
 
 ## 3. MCP 怎样接入独立物流和售后服务？
 
-口述：服务端通过 FastMCP 暴露工具，客服后端通过 MultiServerMCPClient 发现工具，转换为 LangChain 工具对象并合并注册。模型发出调用请求后，由后端经 MCP 执行，模型不直接连接服务。
+实现：服务端通过 FastMCP 暴露工具，客服后端通过 MultiServerMCPClient 发现工具，转换为 LangChain 工具对象并合并注册。模型发出调用请求后，由后端经 MCP 执行，模型不直接连接服务。
 
-| 追问 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
 | --- | --- | --- | --- |
 | 独立服务定义在哪里？ | [物流工具](../../mcp_servers/logistics_server.py#L22)、[售后工具](../../mcp_servers/aftersales_server.py#L20) | @mcp.tool、FastMCP、服务启动入口 | 物流、保修、退货进度目前为模拟数据 |
 | 客服怎样发现工具？ | [get_client](../../app/tools/mcp_client.py#L54)、[fetch_mcp_specs](../../app/tools/mcp_client.py#L67) | get_tools、发现超时、不可达跳过 | 动态发现有延迟与可用性代价 |
@@ -46,9 +46,9 @@
 
 ## 4. Langfuse 如何记录运行并统计 Token？
 
-口述：图编译后挂 Langfuse 的 LangChain 回调，用 session ID 关联会话，用意图标签分组，沿实际运行轨迹排查分类、检索、工具和生成阶段，再从 Metrics API 汇总用量。
+实现：图编译后挂 Langfuse 的 LangChain 回调，用 session ID 关联会话，用意图标签分组，沿实际运行轨迹排查分类、检索、工具和生成阶段，再从 Metrics API 汇总用量。
 
-| 追问 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
 | --- | --- | --- | --- |
 | 回调在哪里挂？ | [attach_observability](../../app/core/observability.py#L55)、[init_graph](../../app/graph/runtime.py#L33) | graph.with_config(callbacks) | 未配置时原样返回图 |
 | 同一会话怎么关联？ | [run_turn](../../app/graph/runtime.py#L144) | langfuse_session_id 与 thread_id | 前者观测归组，后者检查点状态标识 |
@@ -56,9 +56,9 @@
 | Token 报表如何计算？ | [_query](../../scripts/cost_by_intent.py#L43)、[_aggregate](../../scripts/cost_by_intent.py#L55) | Metrics API、按意图汇总、trace 去重 | count 是 trace 数；报表不直接核对货币账单 |
 | 主 Agent 的 tokens_used 是全部费用吗？ | [main_agent](../../app/graph/nodes.py#L316) | usage_metadata、逐步累加 | 该字段主要累计主 Agent，不等于全链路总消耗 |
 
-## 一条工具链的投屏顺序
+## 订单物流工具链的阅读顺序
 
-以“订单 1001 的物流到哪里了”为讲解示例，不声称这是本次刚执行的线上记录：
+以下以“订单 1001 的物流到哪里了”为例说明调用关系，实际工具顺序由模型输出决定：
 
 1. 打开 `build.py`，说明订单、物流分支如何进入主 Agent。
 2. 打开 `nodes.py` 的 `main_agent`，指出工具绑定和模型调用。
