@@ -1,0 +1,43 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+# .env 的各种变体(备份、按环境分的副本)同样含真实密钥,必须一起挡住。
+# 只放行 .env.example —— 它是对外发布的模板,里面只有占位符。
+.env.*
+!.env.example
+.pytest_cache/
+.superpowers/
+data/*.db*
+data/*.sqlite*
+data/**/*.sqlite*
+dev-notes/
+log/
+logs/
+*.pid
+data/windows-launcher/
+data/runtime_settings.json
+data/ch10/*
+!data/ch10/reports
+
+# 运行日志:后台页发起的作业与 dev.sh 启动日志,本地产物不入库
+data/*.log
+data/ch04/*.log
+
+# 本机缓存、配置辅助文件、备份与会话检查结果，不作为公开源码提交。
+data/runtime-cache/
+data/uv-cache/
+data/provider-setup/
+data/*backup*/
+data/backend-investigation*/
+data/conversation-checks/
+data/frontend-checks/
+data/interview-notes*/
+data/verification/
+data/publishing-local/
+architecture-learning-lab/validation/
+
+# 公开源码仅跟踪示例知识，运行数据和评估产物本地生成。
+data/**
+!data/kb/
+!data/kb/*.md

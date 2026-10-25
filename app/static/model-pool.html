@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>客小助 CareMate · 模型调用池</title>
+  <link rel="icon" type="image/svg+xml" href="/static/brand.svg">
+  <link rel="stylesheet" href="/static/apple-theme.css?v=apple-1">
+  <style>
+    .pool-panel{background:var(--paper,#fff);border:1px solid var(--hairline,#ddd);border-radius:16px;padding:22px;margin:18px 0}
+    .pool-stats{display:flex;gap:28px;flex-wrap:wrap;margin:16px 0}.pool-stats strong{display:block;font-size:28px}
+    .pool-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:18px}
+    .pool-form label{display:grid;gap:7px;font-size:13px}.pool-form input{width:100%;min-width:0;padding:8px;border:1px solid var(--hairline,#ddd);border-radius:8px;background:transparent}
+    .pool-table{overflow-x:auto}.pool-table table{width:100%;white-space:nowrap;border-collapse:collapse;font-size:13px}
+    .pool-table th,.pool-table td{padding:11px 12px;border-bottom:1px solid var(--hairline,#ddd);text-align:left}
+    .pool-note{color:var(--text-2,#666);font-size:13px;line-height:1.8}.pool-error{color:#b42318;min-height:24px}.pool-actions{display:flex;gap:10px;margin-top:18px}
+    #new-keys{display:block;width:100%;box-sizing:border-box;min-height:100px;margin:12px 0;padding:12px;border:1px solid var(--hairline,#ddd);border-radius:8px;background:transparent;font:inherit;-webkit-text-security:disc}.key-channels{display:flex;gap:20px;flex-wrap:wrap}
+  </style>
+</head>
+<body class="mh-admin"><main class="wrap">
+  <p class="page-kicker">CAREMATE / MODEL POOL</p>
+  <div class="topbar"><h1>模型调用池</h1><span class="spacer"></span><button class="btn" id="refresh">刷新</button></div>
+  <p class="pool-note">查看聊天、向量化与重排的运行情况，调整并发与等待时间。配置保存后对新调用生效。</p>
+  <div id="error" class="pool-error" role="status"></div>
+  <section class="pool-panel"><h2>运行概况</h2><div id="stats" class="pool-stats">正在读取…</div>
+    <p id="scope" class="pool-note"></p></section>
+  <section class="pool-panel"><h2>并发与超时设置</h2>
+    <form id="policy"><div class="pool-form" id="fields"></div><div class="pool-actions"><button class="btn" type="submit">保存设置</button></div></form>
+    <p class="pool-note">单 Key 实际容量受厂商、模型与配额限制，按实测设置。同一 Key 用于多个模型时共享槽位。排队与重试计入单次调用期限；整轮期限仍会限制完整会话。</p>
+  </section>
+  <section class="pool-panel"><h2>添加 Key</h2>
+    <form id="key-form"><label for="new-keys">API Key（支持批量粘贴，每行一个）</label>
+      <textarea id="new-keys" autocomplete="off" spellcheck="false" autocapitalize="off" required placeholder="粘贴同一厂商的 Key，保存后清空"></textarea>
+      <div class="key-channels"><label><input name="key-channel" type="checkbox" value="chat" checked> 聊天</label><label><input name="key-channel" type="checkbox" value="embed" checked> 向量化</label><label><input name="key-channel" type="checkbox" value="rerank" checked> 重排</label></div>
+      <div class="pool-actions"><button id="add-keys" class="btn" type="submit">添加并立即生效</button></div>
+    </form><p class="pool-note">使用项目为各用途配置的厂商地址与模型。共享 Key 的用途必须属于同一厂商。密钥在本机加密保存，接口仅返回指纹；仅限本机管理。首次添加保留已有环境 Key，可在下方停用或移除。</p>
+  </section>
+  <section class="pool-panel"><h2>Key 槽位</h2><div class="pool-table"><table><thead><tr><th>指纹</th><th>用途</th><th>状态</th><th>正在运行</th><th>操作</th></tr></thead><tbody id="slots"></tbody></table></div></section>
+  <section class="pool-panel"><h2>最近调用</h2><div class="pool-table"><table><thead><tr><th>请求 ID</th><th>用途</th><th>模型</th><th>Key 指纹</th><th>第几次尝试</th><th>排队 / 执行耗时</th><th>结果</th></tr></thead><tbody id="calls"></tbody></table></div></section>
+  <p class="pool-note">同机多个服务进程和后台作业共享容量。成功的聊天请求按请求 ID 保留结果，重复取回不会再次调用模型或执行工具。中断请求请先查看会话和操作记录。</p>
+</main><script src="/static/admin.js?v=caremate-20261023"></script><script src="/static/model-pool.js?v=keys-3"></script></body></html>
