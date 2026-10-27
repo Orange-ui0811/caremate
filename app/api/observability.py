@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, FiniteFloat
 
 from app.config import settings
 from app.core import jobs
-from app.core.confidence import W_KEY, W_MARGIN, W_TOP1, W_VALID
+from app.core.confidence import SCORING_METHOD
 from app.core.runtime_settings import get_confidence_settings, save_confidence_threshold
 from app.db import repository
 
@@ -126,11 +126,15 @@ def _calibration_block() -> dict:
     block["in_use"] = current["threshold"]
     block["in_use_rates"] = None
     block["updated_at"] = current["updated_at"]
-    block["weights"] = {"top1": W_TOP1, "valid_count": W_VALID,
-                        "margin": W_MARGIN, "key_clause": W_KEY}
+    block["scoring_method"] = SCORING_METHOD
+    block["score_description"] = "最终候选中的最高重排分（裁剪到0～1），不加权；通过后仍检查证据充分性。"
     report = _read(CALIB)
     if report is None:
         return block
+    report_method = (report.get("meta") or {}).get("scoring_method", "four_signal_v1")
+    if report_method != SCORING_METHOD:
+        return block | {"status": "outdated", "report_scoring_method": report_method,
+                        "hint": "评分已改为候选最高重排分，旧校准报告的阈值与指标不适用于当前评分。请重跑校准。"}
     rec = report.get("recommended") or {}
     return block | {
         "present": True, "status": "ok",

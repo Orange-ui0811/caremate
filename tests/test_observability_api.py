@@ -15,7 +15,8 @@ COST = {
     "total_tokens": 16763, "total_requests": 4,
 }
 CALIB = {
-    "meta": {"generated_at": "2026-07-29 10:20", "n_answerable": 60, "n_absent": 20},
+    "meta": {"generated_at": "2026-07-29 10:20", "n_answerable": 60, "n_absent": 20,
+             "scoring_method": "max_rerank_v1"},
     "distribution": {"answerable": {"n": 60, "min": 0.034, "p25": 0.489, "p50": 0.715,
                                     "p75": 0.781, "max": 0.856},
                      "absent": {"n": 20, "min": 0.002, "p25": 0.101, "p50": 0.105,
@@ -104,7 +105,22 @@ async def test_calibration_flags_threshold_out_of_sync(client, reports, monkeypa
     assert calib["present"] is True
     assert calib["recommended"]["threshold"] == 0.26 and calib["in_use"] == 0.5
     assert calib["in_sync"] is False
-    assert calib["weights"]["top1"] == 0.5          # 四信号权重是代码常量,页面照抄
+    assert calib["scoring_method"] == "max_rerank_v1"
+    assert "weights" not in calib
+
+
+@pytest.mark.parametrize("method", [None, "four_signal_v1"])
+def test_old_calibration_cannot_offer_recommendation(reports, method):
+    report = {**CALIB, "meta": dict(CALIB["meta"])}
+    if method is None:
+        report["meta"].pop("scoring_method")
+    else:
+        report["meta"]["scoring_method"] = method
+    reports[1].write_text(json.dumps(report), encoding="utf-8")
+    calib = observability._calibration_block()
+    assert calib["status"] == "outdated" and calib["present"] is False
+    assert calib["in_use_rates"] is None
+    assert "recommended" not in calib
 
 
 async def test_broken_report_does_not_take_down_the_page(client, reports):

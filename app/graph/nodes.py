@@ -179,7 +179,7 @@ async def classify_intent(state) -> dict:
 
 async def retrieve_knowledge(state) -> dict:
     """知识类强制检索(复用 ch03/04 检索器):产出编号证据 + 证据强弱信号。
-    ch09 把 ch05 最简机械闸升级成正式置信度闸(四信号加权,阈值评估集校准),
+    第一闸取最终候选最高重排分做相关性粗筛,阈值按同一评分方式校准,
     闸位不动:检索后、进 Agent 前。快照规则:只要走了检索就存 Top3 快照——
     闸不过随落池写库;闸都过留在 state 供事后 👎 回捞(踩的往往是「检到了但答砸」)。"""
     query_raw = _user_text(state)
@@ -193,7 +193,7 @@ async def retrieve_knowledge(state) -> dict:
     base = {"evidence_confidence": conf.score,
             "retrieved_snapshot": snapshot_from_hits(hits)}
 
-    # 置信度闸(原机械闸升级):四信号加权总分低于校准阈值 → 证据弱,拒答落池
+    # 相关性粗筛:候选最高重排分低于当前阈值 → 证据弱,拒答落池
     if conf.score < get_evidence_confidence_threshold():
         return {**base, "evidence_strong": False, "fallback_source": "retrieval_low_conf",
                 "trace": {"forced_rag": True, "evidence_confidence": conf.score,

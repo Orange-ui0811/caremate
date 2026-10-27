@@ -30,6 +30,19 @@ async def test_saved_threshold_is_used_without_restart_and_survives_fresh_import
     spec.loader.exec_module(fresh)
     fresh.SETTINGS_PATH = runtime_settings.SETTINGS_PATH
     assert fresh.get_evidence_confidence_threshold() == .17
+    assert fresh.get_confidence_settings()["scoring_method"] == "max_rerank_v1"
+
+
+@pytest.mark.parametrize("method", [None, "four_signal_v1"])
+def test_old_scoring_threshold_is_not_reused(method, monkeypatch):
+    monkeypatch.setattr(runtime_settings.settings, "evidence_confidence_threshold", .2260993940477108)
+    old = {"threshold": .26, "updated_at": "2026-10-22T07:41:31Z"}
+    if method is not None:
+        old["scoring_method"] = method
+    runtime_settings.SETTINGS_PATH.write_text(json.dumps(old), encoding="utf-8")
+    assert runtime_settings.get_evidence_confidence_threshold() == .2260993940477108
+    runtime_settings.save_confidence_threshold(.3)
+    assert runtime_settings.get_evidence_confidence_threshold() == .3
 
 
 @pytest.mark.parametrize("value", [-.01, 1.01, None, "NaN", "Infinity", True, "0.17"])

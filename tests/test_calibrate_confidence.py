@@ -86,6 +86,9 @@ async def test_main_serial_and_publishes_full_precision_scores(report_paths, mon
     assert all(priority == "background" for _, priority in seen)
     assert data["scores"] == {"answerable": [.40001, .9], "absent": [.1, .4]}
     assert data["meta"]["n_answerable"] == data["meta"]["n_absent"] == 2
+    assert data["meta"]["scoring_method"] == "max_rerank_v1"
+    assert data["meta"]["source"] == "live_retrieval"
+    assert data["recommended"]["selection_rule"] == "youden_j"
     assert data["scan"][35] == {"t": .4, "pass_rate": 1, "leak_rate": .5, "youden_j": .5}
     assert not list(report_paths.glob("*.tmp"))
 

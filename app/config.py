@@ -84,7 +84,8 @@ class Settings(BaseSettings):
     langfuse_base_url: str = ""     # 如 http://localhost:3000(自部署地址,数据不出门)
     # ch09 检索证据置信度默认阈值。管理端 /observability 保存的运行配置优先,
     # 未保存时使用此值(也可由环境变量覆盖);每次检索从 runtime_settings 读取有效值。
-    evidence_confidence_threshold: float = 0.26
+    # max_rerank_v1：2026-10-27 内部实验，ABCD校准误放上限5%的候选阈值。
+    evidence_confidence_threshold: float = 0.2260993940477108
 
 
 settings = Settings()

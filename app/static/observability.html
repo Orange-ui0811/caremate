@@ -318,7 +318,7 @@
       }
       if (pick !== null && pick !== undefined) {
         svg.appendChild(svgEl("line", { x1: xs(pick), y1: M.t, x2: xs(pick), y2: y0, class: "pick" }));
-        svg.appendChild(svgEl("text", { x: xs(pick) + 6, y: M.t + 12, class: "glabel" }, "选定 " + pick.toFixed(2)));
+        svg.appendChild(svgEl("text", { x: xs(pick) + 6, y: M.t + 12, class: "glabel" }, "选定 " + Number(pick.toFixed(4))));
       }
       // 沿横轴取最近的真实扫描点，同时显示两条线，重合时也不会挡住另一条。
       if (!scan.length) return;
@@ -341,7 +341,7 @@
         passDot.setAttribute("cx", x); passDot.setAttribute("cy", ys(row.pass_rate));
         leakDot.setAttribute("cx", x); leakDot.setAttribute("cy", ys(row.leak_rate));
         tip.setAttribute("transform", "translate(" + Math.max(M.l, Math.min(x + 12, W - 224)) + ",24)");
-        tipRows[0].textContent = "扫描阈值 " + row.t.toFixed(2);
+        tipRows[0].textContent = "扫描阈值 " + Number(row.t.toFixed(4));
         tipRows[1].textContent = "可答通过率（绿） " + ratePct(row.pass_rate);
         tipRows[2].textContent = "应拒放行率（红） " + ratePct(row.leak_rate);
         hover.setAttribute("visibility", "visible");
@@ -383,7 +383,7 @@
       apply.type = "button";
       const recommended = d.present ? d.recommended?.threshold : undefined;
       apply.disabled = !Number.isFinite(recommended);
-      if (Number.isFinite(recommended)) apply.textContent += "（" + recommended.toFixed(2) + "）";
+      if (Number.isFinite(recommended)) apply.textContent += "（" + Number(recommended.toFixed(4)) + "）";
       controls.append(label, input, save, apply);
       box.appendChild(controls);
       const status = el("p", null, "当前生效：" + d.in_use + "。保存后立即用于后续提问，重启后仍保留。");
@@ -421,17 +421,13 @@
 
     function calibrationPanel(d) {
       const p = el("div", "panel");
-      panelHead(p, "置信度阈值校准", ["ch04 评估集实跑", "info"],
-        "兜底那道闸卡在什么分上,不是拍脑袋定的。拿评估集里可答的和该拒的两拨题各算一遍"
-        + "证据置信度,再扫一遍阈值,看哪条线把两拨分得最开。");
-      const w = d.weights;
+      panelHead(p, "置信度阈值校准", [d.meta?.source === "recorded_api_replay" ? "真实API记录回放" : "ch04 评估集实跑", "info"],
+        "用可答题和应拒题的证据分数扫描阈值，比较可答通过率与应拒放行率，查看当前阈值的取舍。");
       p.appendChild(thresholdSettings(d));
       const wnote = el("div", "note");
       wnote.appendChild(el("h3", null, "置信度怎么算出来的"));
       wnote.appendChild(el("p", null,
-        "四信号加权:Top1 精排分 " + w.top1 + " / 有效证据数 " + w.valid_count
-        + " / Top1-Top2 分差 " + w.margin + " / 关键条款命中 " + w.key_clause
-        + "。权重是代码里的常量,校准校的是这条线该划在哪。"));
+        d.score_description || "取最终候选中的最高重排分做相关性粗筛，通过后仍检查证据充分性。"));
       if (!d.present) {
         p.appendChild(missingBox(d.hint));
         p.appendChild(wnote);
@@ -439,8 +435,11 @@
         return p;
       }
       const rec = d.recommended, dist = d.distribution, currentRates = d.in_use_rates;
+      if (d.meta?.source_label) p.appendChild(el("p", "hint", d.meta.source_label));
+      if (d.meta?.limitation) p.appendChild(el("p", "hint", d.meta.limitation));
       p.appendChild(kpis([
-        { label: "推荐阈值", val: rec.threshold.toFixed(2), sub: "Youden J " + fmt3(rec.youden_j) + " · 两拨分得最开的那条线" },
+        { label: "推荐阈值", val: String(Number(rec.threshold.toFixed(4))),
+          sub: rec.selection_rule_label || "Youden J " + fmt3(rec.youden_j) + " · 两拨分得最开的那条线" },
         { label: "在用阈值", val: String(d.in_use),
           sub: d.in_sync ? "与推荐一致" : "可在上方应用推荐值或自定义阈值" },
         { label: "当前可答通过率", val: ratePct(currentRates?.pass_rate),
@@ -462,7 +461,7 @@
       p.appendChild(table(["题型", "题数", "最低", "p25", "中位", "p75", "最高"], drows));
 
       const sub = el("div", "subhead", "阈值扫描");
-      sub.appendChild(el("span", "unit", "0.05 → 0.95，步进 0.01 · 悬停查看两条线的通过率 / 放行率"));
+      sub.appendChild(el("span", "unit", "悬停或使用方向键查看实际扫描点的通过率 / 放行率，含报告中的精确选定阈值"));
       p.appendChild(sub);
       const lg = el("div", "legend");
       for (const [label, color] of [["可答通过率", "var(--online)"], ["应拒放行率", "var(--error)"],
@@ -485,7 +484,7 @@
 
       const read = el("div", "read");
       read.innerHTML = readNoteHtml(d.read_note,
-        "推荐阈值为 <b>" + rec.threshold.toFixed(2) + "</b>，该轮评估的可答通过率为 <b>"
+        "推荐阈值为 <b>" + Number(rec.threshold.toFixed(4)) + "</b>，该轮评估的可答通过率为 <b>"
         + pct(rec.pass_rate) + "</b>，应拒放行率为 <b>" + pct(rec.leak_rate)
         + "</b>。降低阈值通常会减少误拦，同时可能放行更多缺乏证据的问题。");
       p.appendChild(read);

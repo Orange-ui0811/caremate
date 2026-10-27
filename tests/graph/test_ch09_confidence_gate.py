@@ -51,8 +51,8 @@ async def test_low_confidence_blocks_with_source_and_snapshot(stub_retrieval, st
 
 
 async def test_saved_threshold_changes_real_gate_and_keeps_selfcheck(stub_retrieval, stub_selfcheck):
-    # 单条 .28 的证据分为 .196,处于 .17 与 .26 之间。
-    stub_retrieval(_mk_hits(.28))
+    # 最高重排分 .20，处于 .17 与 .26 之间。
+    stub_retrieval(_mk_hits(.20))
     stub_selfcheck(True)
     save_confidence_threshold(.26)
     before = await nodes.retrieve_knowledge(_state())
@@ -63,6 +63,33 @@ async def test_saved_threshold_changes_real_gate_and_keeps_selfcheck(stub_retrie
     stub_selfcheck(False, "仍缺信息")
     rejected = await nodes.retrieve_knowledge(_state())
     assert rejected["fallback_source"] == "self_check"
+
+
+async def test_unordered_top10_passes_all_hits_to_selfcheck(stub_retrieval, monkeypatch):
+    hits = _mk_hits(.01, .92, .1, .2, .3, .4, .5, .6, .7, .8)
+    stub_retrieval(hits)
+    save_confidence_threshold(.9)
+    seen = []
+    async def check(q, evidence):
+        seen.extend(evidence)
+        return {"useful": True, "reason": ""}
+    monkeypatch.setattr(nodes.selfcheck, "check_sufficient", check)
+    out = await nodes.retrieve_knowledge(_state())
+    assert out["evidence_confidence"] == .92
+    assert len(seen) == len(out["citations"]) == 10
+    assert out["evidence_strong"] is True
+    assert out["trace"]["confidence_signals"]["scoring_method"] == "max_rerank_v1"
+
+
+@pytest.mark.parametrize("offset,accepted", [(0, True), (-1e-12, False)])
+async def test_gate_keeps_exact_calibrated_boundary(offset, accepted, stub_retrieval,
+                                                  stub_selfcheck):
+    threshold = .2260993940477108
+    save_confidence_threshold(threshold)
+    stub_retrieval(_mk_hits(threshold + offset))
+    stub_selfcheck(True)
+    out = await nodes.retrieve_knowledge(_state())
+    assert out["evidence_strong"] is accepted
 
 
 async def test_selfcheck_fail_labels_self_check(stub_retrieval, stub_selfcheck, monkeypatch):

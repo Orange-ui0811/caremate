@@ -14,7 +14,7 @@ from datetime import datetime
 
 from app.config import settings
 from app.core import model_pool, read_notes, retrieval
-from app.core.confidence import compute_evidence_confidence
+from app.core.confidence import SCORING_METHOD, compute_evidence_confidence
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _OUT_DIR = _ROOT / "data/ch09/reports"
@@ -124,7 +124,9 @@ async def main():
     pick = next((r for r in scan if r["t"] == round(best_t, 2)), None)
     recommended = {"threshold": round(best_t, 2), "youden_j": round(best_j, 3),
                    "pass_rate": pick["pass_rate"] if pick else None,
-                   "leak_rate": pick["leak_rate"] if pick else None}
+                   "leak_rate": pick["leak_rate"] if pick else None,
+                   "selection_rule": "youden_j",
+                   "selection_rule_label": "Youden J 最大：可答通过率减应拒放行率"}
     # 读图小注只喂十分位那几条扫描线:整条 91 点曲线塞进去,模型容易挑个无关的点来说事。
     # 字段名一律换成页面上那几个中文表头,注里就不会出现 pass_rate 这种说法
     def _zh(stat):
@@ -144,7 +146,10 @@ async def main():
     _write_atomic(_OUT, "\n".join(_LINES) + "\n")
     _write_atomic(_OUT_JSON, json.dumps({
         "meta": {"generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                 "strategy": "hybrid_rerank", "dataset": "tests/data/eval_ch04.jsonl",
+                 "strategy": "hybrid_rerank", "scoring_method": SCORING_METHOD,
+                 "source": "live_retrieval",
+                 "source_label": "当前检索接口实跑；ABC 可答题与 D 应拒题参与校准，E 桶不参与。",
+                 "dataset": "tests/data/eval_ch04.jsonl",
                  "n_answerable": len(answerable), "n_absent": len(absent)},
         "distribution": dist,
         # 保留未四舍五入的分数，支持管理端任意精度的在用阈值（含 0 与 1）。
@@ -153,7 +158,7 @@ async def main():
         "recommended": recommended,
         "read_notes": {"confidence_calibration": note} if note else {},
     }, ensure_ascii=False, indent=1) + "\n")
-    _log(f"报告已落 {_OUT.relative_to(_ROOT)} 与 {_OUT_JSON.relative_to(_ROOT)}")
+    _log(f"报告已落 {_OUT} 与 {_OUT_JSON}")
 
 
 if __name__ == "__main__":

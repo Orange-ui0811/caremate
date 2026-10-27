@@ -1,7 +1,7 @@
-"""ch09 置信度闸:四信号(Top1 分/有效证据数/分差/关键条款)加权,纯函数可复现。"""
+"""第一道评分：最高候选分，不受排列、重复、分差和关键词影响。"""
 import pytest
 
-from app.core.confidence import EvidenceConfidence, compute_evidence_confidence, snapshot_from_hits
+from app.core.confidence import SCORING_METHOD, compute_evidence_confidence, snapshot_from_hits
 
 
 def _hit(score, q="退货运费谁出", a="满99包邮,退货运费买家承担"):
@@ -12,29 +12,51 @@ def _hit(score, q="退货运费谁出", a="满99包邮,退货运费买家承担"
 def test_empty_hits_zero_confidence():
     r = compute_evidence_confidence([])
     assert r.score == 0.0
-    assert r.signals == {"top1_score": 0.0, "valid_count": 0, "margin": 0.0, "key_clause_hit": False}
+    assert r.signals == {"scoring_method": SCORING_METHOD, "max_rerank_score": 0.0,
+                         "candidate_count": 0, "invalid_score_count": 0}
 
 
 def test_strong_evidence_scores_high():
     r = compute_evidence_confidence([_hit(0.95), _hit(0.40), _hit(0.35)])
-    assert r.score > 0.7
-    assert r.signals["top1_score"] == 0.95
-    assert r.signals["margin"] == pytest.approx(0.55)
-    assert r.signals["key_clause_hit"] is True   # 「退货」「运费」命中关键条款词表
+    assert r.score == 0.95
+    assert r.signals["max_rerank_score"] == 0.95
+    assert r.signals["candidate_count"] == 3
 
 
 def test_weak_flat_evidence_scores_low():
     hits = [_hit(0.22, q="猫粮口味", a="三文鱼味与鸡肉味"),
             _hit(0.21, q="猫粮口味", a="三文鱼味与鸡肉味")]
     r = compute_evidence_confidence(hits)
-    assert r.score < 0.4
-    assert r.signals["valid_count"] == 0          # 全部低于有效线
-    assert r.signals["key_clause_hit"] is False
+    assert r.score == .22
 
 
-def test_single_hit_margin_falls_back_to_top1():
+def test_adding_related_or_duplicate_hits_cannot_reduce_score():
     r = compute_evidence_confidence([_hit(0.8)])
-    assert r.signals["margin"] == pytest.approx(0.8)
+    assert r.score == compute_evidence_confidence([_hit(.8), _hit(.79), _hit(.8)]).score
+
+
+def test_round_robin_order_does_not_change_max_score():
+    scores = [.1, .92, .3, .8, .2, .4, .6, .5, .7, .9]
+    for order in (scores, scores[::-1], sorted(scores)):
+        assert compute_evidence_confidence([_hit(s) for s in order]).score == .92
+
+
+def test_policy_keyword_cannot_raise_score():
+    assert compute_evidence_confidence([_hit(.2)]).score == compute_evidence_confidence(
+        [_hit(.2, q="猫粮口味", a="三文鱼味")]).score
+
+
+def test_score_preserves_threshold_precision():
+    value = .2260993940477108
+    assert compute_evidence_confidence([_hit(value)]).score == value
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), None, "bad"])
+def test_invalid_scores_cannot_open_gate(value):
+    r = compute_evidence_confidence([_hit(value), _hit(.1)])
+    assert r.score == .1
+    assert r.signals["invalid_score_count"] == 1
+    assert compute_evidence_confidence([_hit(value)]).score == 0
 
 
 def test_score_monotonic_in_top1():
@@ -44,8 +66,8 @@ def test_score_monotonic_in_top1():
 
 
 def test_score_bounded_zero_one():
-    r = compute_evidence_confidence([_hit(1.0), _hit(0.0)])
-    assert 0.0 <= r.score <= 1.0
+    assert compute_evidence_confidence([_hit(2.0), _hit(-1)]).score == 1
+    assert compute_evidence_confidence([_hit(-1)]).score == 0
 
 
 def test_snapshot_from_hits_top3_shape():
