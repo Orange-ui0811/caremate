@@ -84,10 +84,10 @@ try {
     Write-Host '[2/5] Starting database and search services...'
     Invoke-Checked 'docker' @('info','--format','{{.OSType}}')
     Invoke-Checked 'docker' @('compose','up','-d','--wait','--wait-timeout','300')
-    Invoke-Checked 'docker' @('exec','mewhelp-mysql','mysql','--default-character-set=utf8mb4','-uroot','-proot','mewhelp','-e','SELECT COUNT(*) AS faq_rows FROM faq;')
+    Invoke-Checked 'docker' @('compose','exec','-T','mysql','mysql','--default-character-set=utf8mb4','-uroot','-proot','mewhelp','-e','SELECT COUNT(*) AS faq_rows FROM faq;')
     if ($values['LANGFUSE_PUBLIC_KEY'] -and $values['LANGFUSE_SECRET_KEY']) {
         Write-Host 'Starting local observability services...'
-        Invoke-Checked 'docker' @('compose','-p','mewhelp-langfuse','-f','docker-compose.langfuse.yml','up','-d','--wait','--wait-timeout','300')
+        Invoke-Checked 'docker' @('compose','-f','docker-compose.langfuse.yml','up','-d','--wait','--wait-timeout','300')
         $deadline = (Get-Date).AddMinutes(5)
         do {
             try {

@@ -11,6 +11,8 @@
 # In addition, we recommend to restrict inbound traffic on the host to langfuse-web (port 3000) and minio (port 9090) only.
 # All other components are bound to localhost (127.0.0.1) to only accept connections from the local machine.
 # External connections from other machines will not be able to reach these services directly.
+name: caremate-langfuse
+
 services:
   langfuse-worker:
     image: docker.io/langfuse/langfuse-worker:3
@@ -177,12 +179,17 @@ services:
 
 volumes:
   langfuse_postgres_data:
-    driver: local
+    name: ${CAREMATE_LANGFUSE_POSTGRES_VOLUME:-caremate-langfuse_langfuse_postgres_data}
+    external: ${CAREMATE_DOCKER_EXTERNAL_VOLUMES:-false}
   langfuse_clickhouse_data:
-    driver: local
+    name: ${CAREMATE_LANGFUSE_CLICKHOUSE_VOLUME:-caremate-langfuse_langfuse_clickhouse_data}
+    external: ${CAREMATE_DOCKER_EXTERNAL_VOLUMES:-false}
   langfuse_clickhouse_logs:
-    driver: local
+    name: ${CAREMATE_LANGFUSE_CLICKHOUSE_LOGS_VOLUME:-caremate-langfuse_langfuse_clickhouse_logs}
+    external: ${CAREMATE_DOCKER_EXTERNAL_VOLUMES:-false}
   langfuse_minio_data:
-    driver: local
+    name: ${CAREMATE_LANGFUSE_MINIO_VOLUME:-caremate-langfuse_langfuse_minio_data}
+    external: ${CAREMATE_DOCKER_EXTERNAL_VOLUMES:-false}
   langfuse_redis_data:
-    driver: local
+    name: ${CAREMATE_LANGFUSE_REDIS_VOLUME:-caremate-langfuse_langfuse_redis_data}
+    external: ${CAREMATE_DOCKER_EXTERNAL_VOLUMES:-false}
