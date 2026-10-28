@@ -2,7 +2,7 @@
 
 知识问答依次经过资料分块、向量化、混合检索、重排、证据检查和回答生成。本页按存储、模型选型、检索策略与评估说明实现。
 
-实验入口：[五模型 Embedding 对比](../evaluation/embedding/README.md) · [RAG 四策略评估](../evaluation/rag/README.md)。
+实验入口：[四模型 Embedding 对比](../evaluation/embedding/README.md) · [RAG 四策略评估](../evaluation/rag/README.md)。
 
 源码核对基线：[fcfdd41](https://github.com/Orange-ui0811/caremate/commit/fcfdd419b4736a189e65b7cee2fdd52691fb194e)。源码链接固定到该提交，实验结果的适用范围见下文。
 
@@ -29,7 +29,7 @@ Milvus 的 dense 字段采用余弦相似度，text 使用中文分析器并通�
 
 ## Embedding 选型
 
-当前使用 BGE-M3（1024 维）。[五模型对照](../evaluation/embedding/README.md)固定 52 个知识片段和 300 道问题，比较 M3、BGE-small、BGE-large、Qwen3-Embedding-0.6B 与 4B，采用模型对应的前缀和维度进行纯向量精确余弦排序。
+当前使用 BGE-M3（1024 维）。[四模型对照](../evaluation/embedding/README.md)固定 52 个知识片段和 300 道问题，比较 M3、BGE-small、BGE-large、Qwen3-Embedding-0.6B 与 4B，采用模型对应的前缀和维度进行纯向量精确余弦排序。
 
 - M3 的分组 Recall@5 为 **98.96%**，E 桶跨文档召回为 **95.83%**，为该题集中的较高结果。
 - Qwen0.6B 的分组倒数排名@10 为 **0.8624**，高于 M3 的 0.8444。
