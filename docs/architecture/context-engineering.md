@@ -4,6 +4,20 @@
 
 四种方法的实验结果、问题设计和成本口径见 [上下文四方法报告](../evaluation/context/README.md)。本次公开的是报告与当前方案说明；公开应用源码的基础快照尚未同步本地全部新回查实现，下述新配置不能视为当前公开旧代码已经支持的完整运行承诺。
 
+## 源码与实现对应
+
+下面保留逐段源码入口。**基础源码**链接固定到已公开提交，避免后续行号漂移；**新回查代码摘录**来自当前本地实现，尚不代表整套应用源码已同步。
+
+| 要理解的步骤 | 对应代码 | 阅读重点 |
+| --- | --- | --- |
+| 摘要边界与 Token 滑窗 | [memory.build_window](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/memory.py#L45) | 先按摘要覆盖边界取原文，再限制窗口大小 |
+| 滚动摘要维护 | [compute_boundary](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/summarizer.py#L33)、[run_summary](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/summarizer.py#L54)、[maybe_schedule_summary](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/summarizer.py#L82) | 触发条件、保留近期轮次，以及摘要成功后推进边界 |
+| 指代消解 | [coref.resolve](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/coref.py#L5)、[resolve_reference 节点](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/graph/nodes.py#L153) | 历史与当前问题怎样进入提示词，模型失败时怎样回退 |
+| 新一轮历史恢复 | [runtime._new_turn_input](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/graph/runtime.py#L123) | 持久化原话怎样恢复到图状态 |
+| 基础版节点输入拼装 | [_history_text](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/graph/nodes.py#L39)、[_agent_messages](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/graph/nodes.py#L274) | 指代/意图的历史文本与主 Agent 的消息列表分别怎样形成 |
+| 新回查：BM25、邻轮扩展、逐节点去重 | [当前实现代码摘录](code-excerpts/context-recall.md#recall) | Top3 命中、前后邻轮、可见消息 ID、来源引用 |
+| 新回查怎样接进各节点 | [节点接入代码摘录](code-excerpts/context-recall.md#integration) | 先确定节点窗口，再补充该节点缺少的原话 |
+
 ## 三类历史材料各有什么作用
 
 | 材料 | 保留什么 | 主要作用 |
@@ -22,11 +36,26 @@
 4. **逐节点去重。** 指代、意图和回答节点先完成自己的窗口截取，再按该节点已经可见的原文消息 ID 去重。若只已有某单元的一部分消息，仅补缺少部分；不按文本相同去重，也不因为摘要提到某事实就删除对应原话。
 5. **附带来源。** 按历史顺序追加需要的原文，保留用户/客服角色、消息位置与来源引用。没有正分命中或已全部可见时，不追加。
 
+核心选择与去重代码如下，摘自当前 `dialogue_supplement`；完整来源过滤和引用生成见[代码摘录](code-excerpts/context-recall.md#recall)。
+
+```python
+    units = _units(rows[:-1])
+    ranked = _rank(units, rows[-1]["content"])
+    selected, reasons = set(), {}
+    for index, _ in ranked[:3]:
+        for i, reason in ((index,"bm25_match"),(index-1,"previous_unit"),(index+1,"following_unit")):
+            if 0 <= i < len(units):
+                selected.add(i)
+                reasons.setdefault(i,[]).append(reason)
+    candidates = [row for i in sorted(selected) for row in units[i]]
+    chosen = [row for row in candidates if row["id"] not in visible]
+```
+
 摘要提供概括，回查提供可定位的原话；两者不会自动变成当前业务事实。历史客服说“已签收”不能替代本轮物流回执，历史提及或撤回限制也不代表已经授权退款或建工单。
 
 ## 摘要和窗口如何维护
 
-当前开发运行配置如下，配置变化需要重启服务：
+维护过程对应 [摘要实现](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/summarizer.py#L33) 与 [窗口实现](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/core/memory.py#L45)。当前开发运行配置如下，配置变化需要重启服务：
 
 ```dotenv
 CONTEXT_POLICY=legacy
@@ -45,6 +74,8 @@ CONTEXT_LEGACY_RECALL_MODE=all_visible_neighbors
 - 旧会话下次请求可以从已存原话回查；已有摘要不会因为配置切换被批量重写，下次符合维护条件时再更新。
 
 ## 一轮请求里的位置
+
+代码阅读顺序：先看 [历史恢复](https://github.com/Orange-ui0811/caremate/blob/984339471d71c44c9513bfd5fe87b69a3a289d43/app/graph/runtime.py#L123)，再看[新回查的节点接入](code-excerpts/context-recall.md#integration)。
 
 新用户轮先从数据库恢复已展示的原话，再分别形成各节点需要的摘要、近期窗口及回查补充。指代节点尝试补全“那单、摄影棚那件”等指代；意图节点读取相应历史选择路线；回答节点将系统规则、历史和本轮知识/订单/工具材料交给主 Agent。
 
