@@ -1,60 +1,60 @@
 # 框架源码索引：LangChain、LangGraph、MCP 与 Langfuse
 
-核对日期：2026-10-25。本页将模块职责、关键函数和实现边界对应到源码，覆盖 LangChain、LangGraph、MCP 与 Langfuse。
+源码基线：2026-10-28，提交 `fcfdd41`。本页按 LangChain、LangGraph、MCP 与 Langfuse 列出关键函数和实现细节。
 
-链接的 `#L` 为本次核对的 GitHub 行号；代码变化后按函数名重新定位。引用源码时可在 GitHub 源码页按 `y` 转为提交固定链接，再选择相关行，避免分支变化使证据漂移。
+源码链接固定到上述提交；整体调用关系见[Workflow 与 Agent](workflow-and-agent.md)。
 
 ## 1. LangChain 如何组织模型、提示词、结构化结果与工具调用？
 
 实现：项目用 LangChain 统一提示词、模型调用、结构化结果和工具消息。业务规则由项目定义，框架负责调用与组合机制。
 
-| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 实现细节 |
 | --- | --- | --- | --- |
-| 模型在哪里创建？ | [get_chat_model](../../app/core/llm.py#L74) | 模型配置与 ChatOpenAI 封装 | 配置和兼容逻辑是项目代码 |
-| 提示词怎么填参数？ | [INTENT_CLASSIFY_PROMPT](../../app/core/prompts.py#L207) | ChatPromptTemplate、query/history | 业务分类规则由提示词内容定义 |
-| 如何得到固定字段？ | [structured](../../app/core/llm.py#L161)、[_Intent](../../app/core/intent.py#L13) | with_structured_output、Pydantic 字段 | 结构合法不代表分类正确 |
-| 提示词与模型怎么串起来？ | [classify](../../app/core/intent.py#L19) | prompt 与 model 通过管道组合、ainvoke | 解析失败有项目兜底 |
-| 工具如何发给模型？ | [main_agent](../../app/graph/nodes.py#L316) | get_all_specs、bind_tools、ainvoke | 绑定当时可用的全部业务工具 |
-| Python 函数怎么成为工具？ | [query_order](../../app/tools/builtin/orders.py#L16) | 函数上方的 @tool、参数、说明 | 实际业务逻辑仍需自行实现 |
+| 模型在哪里创建？ | [get_chat_model](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/llm.py#L74) | 模型配置与 ChatOpenAI 封装 | 配置和兼容逻辑是项目代码 |
+| 提示词怎么填参数？ | [INTENT_CLASSIFY_PROMPT](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/prompts.py#L207) | ChatPromptTemplate、query/history | 业务分类规则由提示词内容定义 |
+| 如何得到固定字段？ | [structured](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/llm.py#L161)、[_Intent](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/intent.py#L13) | with_structured_output、Pydantic 字段 | 字段与类型由 schema 校验，分类质量单独评估 |
+| 提示词与模型怎么串起来？ | [classify](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/intent.py#L19) | prompt 与 model 通过管道组合、ainvoke | 解析失败有项目兜底 |
+| 工具如何发给模型？ | [main_agent](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/nodes.py#L316) | get_all_specs、bind_tools、ainvoke | 绑定当时可用的全部业务工具 |
+| Python 函数怎么成为工具？ | [query_order](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/tools/builtin/orders.py#L16) | 函数上方的 @tool、参数、说明 | 实际业务逻辑仍需自行实现 |
 
 ## 2. LangGraph 如何组织流程、状态、分支与 Agent 循环？
 
 实现：外层图规定业务路线与必要步骤；内层通过主模型和工具节点构成 ReAct 式循环。检查点负责状态保存，interrupt/resume 处理用户选择与确认。
 
-| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 实现细节 |
 | --- | --- | --- | --- |
-| 整体流程在哪里？ | [_builder](../../app/graph/build.py#L8) | StateGraph、add_node、固定边、条件边 | 图节点不等于独立 Agent |
-| 九类到五路线在哪里？ | [INTENT_TO_ROUTE](../../app/graph/routing.py#L7) | 意图到路线的固定映射 | 当前一次输出一个主意图 |
-| 节点之间怎么传数据？ | [ConversationState](../../app/graph/state.py#L18) | messages、order_data、evidence、steps | messages 使用 add_messages 合并 |
-| 为什么叫 ReAct 式循环？ | [main_agent](../../app/graph/nodes.py#L316)、[agent_tools](../../app/graph/nodes.py#L338) | 模型选择行动，后端执行，ToolMessage 返回结果 | 没有强制输出显式 Thought 文本 |
-| 什么时候停止？ | [should_continue](../../app/graph/routing.py#L30) | 无 tool_calls 或达到步数上限 | 达上限停止不代表成功，也无额外总结节点 |
-| 缺订单怎么办？ | [fetch_order](../../app/graph/nodes.py#L66) | 归属检查、interrupt 订单选择 | 恢复时节点会重跑，暂停前避免副作用 |
-| 状态怎么保存和恢复？ | [init_graph](../../app/graph/runtime.py#L33)、[resume_turn](../../app/graph/runtime.py#L158) | SQLite checkpointer、thread_id、Command(resume) | 检查点不自动保证外部写操作幂等 |
-| 新用户轮与工具循环的历史有何不同？ | [_new_turn_input](../../app/graph/runtime.py#L123) | 新轮恢复 MySQL 中已查看的对话；resume 保留中断状态 | 历史恢复与当前轮工具结果回传是两条逻辑 |
+| 整体流程在哪里？ | [_builder](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/build.py#L8) | StateGraph、add_node、固定边、条件边 | 多个处理节点共享状态，使用单主 Agent |
+| 九类到五路线在哪里？ | [INTENT_TO_ROUTE](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/routing.py#L7) | 意图到路线的固定映射 | 当前一次输出一个主意图 |
+| 节点之间怎么传数据？ | [ConversationState](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/state.py#L18) | messages、order_data、evidence、steps | messages 使用 add_messages 合并 |
+| 为什么叫 ReAct 式循环？ | [main_agent](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/nodes.py#L316)、[agent_tools](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/nodes.py#L338) | 模型选择行动，后端执行，ToolMessage 返回结果 | 没有强制输出显式 Thought 文本 |
+| 什么时候停止？ | [should_continue](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/routing.py#L30) | 无 tool_calls 或达到步数上限 | 达到上限进入日志节点，无额外总结生成 |
+| 缺订单怎么办？ | [fetch_order](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/nodes.py#L66) | 归属检查、interrupt 订单选择 | 恢复时节点会重跑，暂停前避免副作用 |
+| 状态怎么保存和恢复？ | [init_graph](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/runtime.py#L33)、[resume_turn](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/runtime.py#L158) | SQLite checkpointer、thread_id、Command(resume) | 检查点保存图状态，外部写操作需业务幂等处理 |
+| 新用户轮与工具循环的历史有何不同？ | [_new_turn_input](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/runtime.py#L123) | 新轮恢复 MySQL 中已查看的对话；resume 保留中断状态 | 历史恢复与当前轮工具结果回传是两条逻辑 |
 
 ## 3. MCP 怎样接入独立物流和售后服务？
 
 实现：服务端通过 FastMCP 暴露工具，客服后端通过 MultiServerMCPClient 发现工具，转换为 LangChain 工具对象并合并注册。模型发出调用请求后，由后端经 MCP 执行，模型不直接连接服务。
 
-| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 实现细节 |
 | --- | --- | --- | --- |
-| 独立服务定义在哪里？ | [物流工具](../../mcp_servers/logistics_server.py#L22)、[售后工具](../../mcp_servers/aftersales_server.py#L20) | @mcp.tool、FastMCP、服务启动入口 | 物流、保修、退货进度目前为模拟数据 |
-| 客服怎样发现工具？ | [get_client](../../app/tools/mcp_client.py#L54)、[fetch_mcp_specs](../../app/tools/mcp_client.py#L67) | get_tools、发现超时、不可达跳过 | 动态发现有延迟与可用性代价 |
-| 本地和远程工具怎么合并？ | [get_all_specs](../../app/tools/registry.py#L96) | 内置优先、按名称合并、MCP 来源 | 静态定义共 5 个内置、3 个 MCP；在线数量随发现结果变化 |
-| 谁校验和执行？ | [execute_tool_call](../../app/tools/engine.py#L101) | 参数校验、可信参数注入、超时、工具 ainvoke、审计 | MCP 本身不代替业务授权 |
-| 写操作如何限制？ | [WRITE_TOOLS](../../app/tools/registry.py#L15)、[agent_tools](../../app/graph/nodes.py#L338) | create_ticket 确认流、submit_refund 表单分支 | 未登记名称默认读；当前不是完整生产权限体系 |
+| 独立服务定义在哪里？ | [物流工具](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/mcp_servers/logistics_server.py#L22)、[售后工具](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/mcp_servers/aftersales_server.py#L20) | @mcp.tool、FastMCP、服务启动入口 | 物流、保修、退货进度目前为模拟数据 |
+| 客服怎样发现工具？ | [get_client](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/tools/mcp_client.py#L54)、[fetch_mcp_specs](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/tools/mcp_client.py#L67) | get_tools、发现超时、不可达跳过 | 动态发现有延迟与可用性代价 |
+| 本地和远程工具怎么合并？ | [get_all_specs](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/tools/registry.py#L96) | 内置优先、按名称合并、MCP 来源 | 静态定义共 5 个内置、3 个 MCP；在线数量随发现结果变化 |
+| 谁校验和执行？ | [execute_tool_call](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/tools/engine.py#L101) | 参数校验、可信参数注入、超时、工具 ainvoke、审计 | 业务授权由执行层检查 |
+| 写操作如何限制？ | [WRITE_TOOLS](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/tools/registry.py#L15)、[agent_tools](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/nodes.py#L338) | create_ticket 确认流、submit_refund 表单分支 | 已注册且未登记为写工具的名称默认按读处理 |
 
 ## 4. Langfuse 如何记录运行并统计 Token？
 
 实现：图编译后挂 Langfuse 的 LangChain 回调，用 session ID 关联会话，用意图标签分组，沿实际运行轨迹排查分类、检索、工具和生成阶段，再从 Metrics API 汇总用量。
 
-| 关注点 | 点击源码 | 找到的关键内容 | 需要说明的边界 |
+| 关注点 | 点击源码 | 找到的关键内容 | 实现细节 |
 | --- | --- | --- | --- |
-| 回调在哪里挂？ | [attach_observability](../../app/core/observability.py#L55)、[init_graph](../../app/graph/runtime.py#L33) | graph.with_config(callbacks) | 未配置时原样返回图 |
-| 同一会话怎么关联？ | [run_turn](../../app/graph/runtime.py#L144) | langfuse_session_id 与 thread_id | 前者观测归组，后者检查点状态标识 |
-| 意图如何进 trace？ | [tag_intent](../../app/core/observability.py#L64) | propagate_attributes、intent 标签及 event | 意图标签是统计维度，不是准确率保证 |
-| Token 报表如何计算？ | [_query](../../scripts/cost_by_intent.py#L43)、[_aggregate](../../scripts/cost_by_intent.py#L55) | Metrics API、按意图汇总、trace 去重 | count 是 trace 数；报表不直接核对货币账单 |
-| 主 Agent 的 tokens_used 是全部费用吗？ | [main_agent](../../app/graph/nodes.py#L316) | usage_metadata、逐步累加 | 该字段主要累计主 Agent，不等于全链路总消耗 |
+| 回调在哪里挂？ | [attach_observability](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/observability.py#L55)、[init_graph](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/runtime.py#L33) | graph.with_config(callbacks) | 未配置时原样返回图 |
+| 同一会话怎么关联？ | [run_turn](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/runtime.py#L144) | langfuse_session_id 与 thread_id | 前者观测归组，后者检查点状态标识 |
+| 意图如何进 trace？ | [tag_intent](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/core/observability.py#L64) | propagate_attributes、intent 标签及 event | 意图标签用于观测分组 |
+| Token 报表如何计算？ | [_query](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/scripts/cost_by_intent.py#L43)、[_aggregate](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/scripts/cost_by_intent.py#L55) | Metrics API、按意图汇总、trace 去重 | count 是 trace 数；报表不直接核对货币账单 |
+| 主 Agent 的 tokens_used 是全部费用吗？ | [main_agent](https://github.com/Orange-ui0811/caremate/blob/fcfdd419b4736a189e65b7cee2fdd52691fb194e/app/graph/nodes.py#L316) | usage_metadata、逐步累加 | 该字段累计主 Agent 模型调用；其他节点另计 |
 
 ## 订单物流工具链的阅读顺序
 
@@ -68,4 +68,4 @@
 6. 回到 `agent_tools`，指出 ToolMessage 与返回主节点的固定边。
 7. 最后打开 `observability.py`，说明这条链怎样留下观测记录。
 
-函数与接口是实现证据；实际成功率、耗时和成本需要带日期、配置与样本范围的实验记录，不能由源码存在推导。
+相关方法对照、题目设计与用量统计见[实验与评估](../evaluation/README.md)。
