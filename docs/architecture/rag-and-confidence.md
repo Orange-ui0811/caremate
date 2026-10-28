@@ -2,6 +2,8 @@
 
 知识问答由入库处理、混合检索、证据评分、生成前自检和回答生成组成。各阶段需要分别验证，召回到资料不等于最终答案正确。
 
+历史结果与测试问题设计：[RAG 四策略评估](../evaluation/rag/README.md)、[五模型 Embedding 对比](../evaluation/embedding/README.md)。两组的日期和链路不同，不能直接拼用指标。
+
 源码核对基线：[e9fa3a2](https://github.com/Orange-ui0811/caremate/commit/e9fa3a25efbeb69dcfbe703826c7c400a10fdfd6)。源码链接固定到该提交，实验结果的适用范围见下文。
 
 ## 知识入库

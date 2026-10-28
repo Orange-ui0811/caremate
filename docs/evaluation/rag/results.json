@@ -1,0 +1,183 @@
+{
+  "experiment": "rag-four-strategies",
+  "experiment_date": "2026-10-11 13:43",
+  "source_artifact_sha256": "a4cf3f5e613bb6925d75f401892fbd1e4cf24ff37747fe67582e827cc0fe44b4",
+  "scope": {
+    "questions": 300,
+    "answerable": 240,
+    "knowledge_chunks": 52,
+    "bucket_counts": {
+      "A_policy": 60,
+      "B_model": 60,
+      "C_colloquial": 60,
+      "D_absent": 60,
+      "E_multi": 60
+    },
+    "new_model_calls_for_publication": 0
+  },
+  "meta": {
+    "n_samples": 300,
+    "kb_chunks": 52,
+    "recall_k": 5,
+    "retrieve_k": 10,
+    "concurrency": 5,
+    "chat_model": "deepseek-ai/DeepSeek-V4-Flash",
+    "generated_at": "2026-10-11 13:43"
+  },
+  "retrieval": {
+    "vector": {
+      "A_policy": {
+        "recall": 1.0,
+        "mrr": 0.919
+      },
+      "B_model": {
+        "recall": 1.0,
+        "mrr": 0.903
+      },
+      "C_colloquial": {
+        "recall": 1.0,
+        "mrr": 0.883
+      },
+      "E_multi": {
+        "recall": 0.892,
+        "mrr": 0.629
+      },
+      "overall": {
+        "recall": 0.973,
+        "mrr": 0.833
+      }
+    },
+    "bm25": {
+      "A_policy": {
+        "recall": 1.0,
+        "mrr": 0.921
+      },
+      "B_model": {
+        "recall": 1.0,
+        "mrr": 0.992
+      },
+      "C_colloquial": {
+        "recall": 0.833,
+        "mrr": 0.64
+      },
+      "E_multi": {
+        "recall": 0.819,
+        "mrr": 0.58
+      },
+      "overall": {
+        "recall": 0.913,
+        "mrr": 0.783
+      }
+    },
+    "hybrid": {
+      "A_policy": {
+        "recall": 1.0,
+        "mrr": 0.922
+      },
+      "B_model": {
+        "recall": 1.0,
+        "mrr": 0.972
+      },
+      "C_colloquial": {
+        "recall": 0.933,
+        "mrr": 0.781
+      },
+      "E_multi": {
+        "recall": 0.858,
+        "mrr": 0.626
+      },
+      "overall": {
+        "recall": 0.948,
+        "mrr": 0.825
+      }
+    },
+    "hybrid_rerank": {
+      "A_policy": {
+        "recall": 1.0,
+        "mrr": 0.956
+      },
+      "B_model": {
+        "recall": 1.0,
+        "mrr": 1.0
+      },
+      "C_colloquial": {
+        "recall": 1.0,
+        "mrr": 0.958
+      },
+      "E_multi": {
+        "recall": 0.936,
+        "mrr": 0.658
+      },
+      "overall": {
+        "recall": 0.984,
+        "mrr": 0.893
+      }
+    }
+  },
+  "evidence_coverage": {
+    "vector": {
+      "A_policy": 1.0,
+      "B_model": 1.0,
+      "C_colloquial": 1.0,
+      "E_multi": 0.989,
+      "overall": 0.997
+    },
+    "bm25": {
+      "A_policy": 1.0,
+      "B_model": 1.0,
+      "C_colloquial": 0.9,
+      "E_multi": 0.947,
+      "overall": 0.962
+    },
+    "hybrid": {
+      "A_policy": 1.0,
+      "B_model": 1.0,
+      "C_colloquial": 1.0,
+      "E_multi": 0.992,
+      "overall": 0.998
+    },
+    "hybrid_rerank": {
+      "A_policy": 1.0,
+      "B_model": 1.0,
+      "C_colloquial": 1.0,
+      "E_multi": 0.975,
+      "overall": 0.994
+    }
+  },
+  "answer_coverage": {
+    "vector": {
+      "A_policy": 0.75,
+      "B_model": 0.578,
+      "C_colloquial": 0.767,
+      "E_multi": 0.847,
+      "overall": 0.735
+    },
+    "bm25": {
+      "A_policy": 0.9,
+      "B_model": 0.867,
+      "C_colloquial": 0.783,
+      "E_multi": 0.819,
+      "overall": 0.842
+    },
+    "hybrid": {
+      "A_policy": 0.942,
+      "B_model": 0.994,
+      "C_colloquial": 0.917,
+      "E_multi": 0.733,
+      "overall": 0.897
+    },
+    "hybrid_rerank": {
+      "A_policy": 0.908,
+      "B_model": 0.994,
+      "C_colloquial": 0.967,
+      "E_multi": 0.878,
+      "overall": 0.937
+    }
+  },
+  "limitations": [
+    "Historical internal evaluation; not current production accuracy.",
+    "Ranking is averaged over required evidence groups.",
+    "Answer coverage uses an LLM judge.",
+    "The complete original runtime and per-call records are not included."
+  ]
+}

@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Workflow 与 Agent | [路由、状态、工具循环与暂停恢复](workflow-and-agent.md) | [图定义](../../app/graph/build.py)、[节点](../../app/graph/nodes.py) |
 | RAG | [知识处理、检索、证据评分与评估](rag-and-confidence.md) | [检索](../../app/core/retrieval.py)、[置信度](../../app/core/confidence.py) |
-| 上下文 | [历史恢复、滑窗、摘要与指代补全](context-engineering.md) | [记忆](../../app/core/memory.py)、[摘要](../../app/core/summarizer.py) |
+| 上下文 | [滚动摘要、滑窗、原文回查与指代补全](context-engineering.md) | [记忆](../../app/core/memory.py)、[摘要](../../app/core/summarizer.py) |
 | 知识反馈 | [问题池、人工审核与主题分类](feedback-and-classifier.md) | [归并](../../app/core/flywheel.py)、[审核](../../app/api/review.py) |
 | 模型请求治理 | [调用池](../model-pool.md) | [模型封装](../../app/core/llm.py) |
 
@@ -36,6 +36,6 @@ LangChain 组织提示词、模型调用、结构化输出和工具消息；Lang
 - 上下文策略：[合成案例](../../tests/data/context_engineering_v1.json)、[评估](../../scripts/eval_context_engineering.py)、[审计](../../scripts/audit_context_eval.py)。
 - 观测接入：[回调测试](../../tests/core/test_observability.py)。
 
-本机运行报告与会话记录未包含在公开源码中。比较结果时应同时记录代码版本、数据版本、模型配置、失败数量和统计分母；单次成功请求不能代表稳定成功率。
+选定的历史实验汇总、题目设计与统计范围见[实验与评估](../evaluation/README.md)，包括 RAG 四策略、五模型 Embedding 和上下文四方法。完整本机运行目录与会话记录未公开。比较结果时应记录代码、数据、模型、失败数量与分母；单次成功不能代表稳定成功率。
 
 历史设计位于 `docs/superpowers/`，描述不同阶段的实现计划。当前行为以源码为准，旧节点名、意图数量和处理路线不能直接当作当前配置。

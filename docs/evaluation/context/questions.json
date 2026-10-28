@@ -1,0 +1,1243 @@
+{
+  "representation": "question_catalog_without_full_seed_history",
+  "source_dataset_version": "context-keep3-five-arm-cases-20261027-v1",
+  "source_dataset_digest": "1dcf9bef73590e11c2f5cbcb0d8ef92b5577202baae421a08bf66ac7a68add34",
+  "source_dataset_file_sha256": "283b9988242d0972dceb8fe055ea153aa288bc8a89046ced1d7d6c2fdbd0bf95",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "unified_early_order_corrected_short",
+      "family": "early_order_corrected",
+      "cohort": "previously_seen_regression",
+      "stratum": "short",
+      "purpose": "远处更正的有效对象与后续显式切换",
+      "initial_history_messages": 16,
+      "initial_history_estimated_tokens": 745,
+      "steps": [
+        {
+          "query": "前面更正后的这张订单，现在运输到哪里了？请实际查一下。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        },
+        {
+          "query": "这次换成订单710004，请查这张单目前的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "object_switch"
+          ]
+        },
+        {
+          "query": "新换的这张订单，再刷新一次物流，告诉我最新进展。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "continuity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_early_order_corrected_long",
+      "family": "early_order_corrected",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "远处更正的有效对象与后续显式切换",
+      "initial_history_messages": 106,
+      "initial_history_estimated_tokens": 7538,
+      "steps": [
+        {
+          "query": "前面更正后的这张订单，现在运输到哪里了？请实际查一下。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        },
+        {
+          "query": "这次换成订单710004，请查这张单目前的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "object_switch"
+          ]
+        },
+        {
+          "query": "新换的这张订单，再刷新一次物流，告诉我最新进展。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "continuity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_natural_task_switch_short",
+      "family": "natural_task_switch",
+      "cohort": "previously_seen_regression",
+      "stratum": "short",
+      "purpose": "自然表达切换对象，旧状态不能覆盖本轮诉求",
+      "initial_history_messages": 18,
+      "initial_history_estimated_tokens": 806,
+      "steps": [
+        {
+          "query": "改为查寄给妈妈的那一单，这次不查工作室的，请给我最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "object_switch"
+          ]
+        },
+        {
+          "query": "回到寄给工作室那一单，查它最新的物流轨迹。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002"
+          },
+          "evaluation_tags": [
+            "object_switch"
+          ]
+        },
+        {
+          "query": "继续刷新目前这单的物流，不需要催单或开工单。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002"
+          },
+          "evaluation_tags": [
+            "continuity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_natural_task_switch_long",
+      "family": "natural_task_switch",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "自然表达切换对象，旧状态不能覆盖本轮诉求",
+      "initial_history_messages": 106,
+      "initial_history_estimated_tokens": 7507,
+      "steps": [
+        {
+          "query": "改为查寄给妈妈的那一单，这次不查工作室的，请给我最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "object_switch"
+          ]
+        },
+        {
+          "query": "回到寄给工作室那一单，查它最新的物流轨迹。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002"
+          },
+          "evaluation_tags": [
+            "object_switch"
+          ]
+        },
+        {
+          "query": "继续刷新目前这单的物流，不需要催单或开工单。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002"
+          },
+          "evaluation_tags": [
+            "continuity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_product_relation_short",
+      "family": "product_relation",
+      "cohort": "previously_seen_regression",
+      "stratum": "short",
+      "purpose": "保存位置、产品与部件关系，而非只记孤立型号",
+      "initial_history_messages": 16,
+      "initial_history_estimated_tokens": 721,
+      "steps": [
+        {
+          "query": "摄影棚那件的镜头应该怎么清洁？请查对应型号的说明。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-CAM1",
+            "fact_groups": [
+              [
+                "断电",
+                "关闭电源",
+                "切断电源",
+                "拔掉电源"
+              ],
+              [
+                "镜头布",
+                "软布"
+              ],
+              [
+                "镜头"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        },
+        {
+          "query": "换到餐厅的那件，食盆应该怎样清洗？",
+          "expected": {
+            "kind": "care",
+            "target": "MH-FD10",
+            "fact_groups": [
+              [
+                "断电",
+                "关闭电源",
+                "切断电源",
+                "拔掉电源"
+              ],
+              [
+                "食盆"
+              ],
+              [
+                "拆",
+                "取下"
+              ],
+              [
+                "晾干",
+                "干燥",
+                "擦干"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        },
+        {
+          "query": "还是刚才餐厅这件，机身要怎么清洁？不要把食盆的清洗方式套到机身上。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-FD10",
+            "fact_groups": [
+              [
+                "机身",
+                "主机"
+              ],
+              [
+                "软布"
+              ],
+              [
+                "擦"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_product_relation_long",
+      "family": "product_relation",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "保存位置、产品与部件关系，而非只记孤立型号",
+      "initial_history_messages": 106,
+      "initial_history_estimated_tokens": 7507,
+      "steps": [
+        {
+          "query": "摄影棚那件的镜头应该怎么清洁？请查对应型号的说明。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-CAM1",
+            "fact_groups": [
+              [
+                "断电",
+                "关闭电源",
+                "切断电源",
+                "拔掉电源"
+              ],
+              [
+                "镜头布",
+                "软布"
+              ],
+              [
+                "镜头"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        },
+        {
+          "query": "换到餐厅的那件，食盆应该怎样清洗？",
+          "expected": {
+            "kind": "care",
+            "target": "MH-FD10",
+            "fact_groups": [
+              [
+                "断电",
+                "关闭电源",
+                "切断电源",
+                "拔掉电源"
+              ],
+              [
+                "食盆"
+              ],
+              [
+                "拆",
+                "取下"
+              ],
+              [
+                "晾干",
+                "干燥",
+                "擦干"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        },
+        {
+          "query": "还是刚才餐厅这件，机身要怎么清洁？不要把食盆的清洗方式套到机身上。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-FD10",
+            "fact_groups": [
+              [
+                "机身",
+                "主机"
+              ],
+              [
+                "软布"
+              ],
+              [
+                "擦"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_constraint_scope_retraction_short",
+      "family": "constraint_scope_retraction",
+      "cohort": "previously_seen_regression",
+      "stratum": "short",
+      "purpose": "部分撤回时保持只读；不据此宣称写授权正确",
+      "initial_history_messages": 16,
+      "initial_history_estimated_tokens": 722,
+      "steps": [
+        {
+          "query": "先查710003现在的物流，不催单、不提交工单。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003",
+            "active_constraints": {
+              "710003": [
+                "ticket",
+                "expedite"
+              ],
+              "710004": [
+                "ticket",
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        },
+        {
+          "query": "只撤回710004不能建工单这一项限制，710003的限制继续保留。但本轮仍仅查询710004的物流，尚未授权任何办理。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004",
+            "active_constraints": {
+              "710003": [
+                "ticket",
+                "expedite"
+              ],
+              "710004": [
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        },
+        {
+          "query": "换回710003，再查一次最新物流；之前针对它的限制仍然有效。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003",
+            "active_constraints": {
+              "710003": [
+                "ticket",
+                "expedite"
+              ],
+              "710004": [
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_constraint_scope_retraction_long",
+      "family": "constraint_scope_retraction",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "部分撤回时保持只读；不据此宣称写授权正确",
+      "initial_history_messages": 106,
+      "initial_history_estimated_tokens": 7516,
+      "steps": [
+        {
+          "query": "先查710003现在的物流，不催单、不提交工单。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003",
+            "active_constraints": {
+              "710003": [
+                "ticket",
+                "expedite"
+              ],
+              "710004": [
+                "ticket",
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        },
+        {
+          "query": "只撤回710004不能建工单这一项限制，710003的限制继续保留。但本轮仍仅查询710004的物流，尚未授权任何办理。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004",
+            "active_constraints": {
+              "710003": [
+                "ticket",
+                "expedite"
+              ],
+              "710004": [
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        },
+        {
+          "query": "换回710003，再查一次最新物流；之前针对它的限制仍然有效。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003",
+            "active_constraints": {
+              "710003": [
+                "ticket",
+                "expedite"
+              ],
+              "710004": [
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_ambiguous_object_short",
+      "family": "ambiguous_object",
+      "cohort": "previously_seen_regression",
+      "stratum": "short",
+      "purpose": "不足时澄清，随后接收选择与更正",
+      "initial_history_messages": 18,
+      "initial_history_estimated_tokens": 790,
+      "steps": [
+        {
+          "query": "先看一下这张单的最新物流吧。",
+          "expected": {
+            "kind": "clarify",
+            "target": "",
+            "candidates": [
+              "710005",
+              "710006"
+            ]
+          },
+          "evaluation_tags": [
+            "ambiguity"
+          ]
+        },
+        {
+          "query": "我明确选710005，请实际查询它的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710005"
+          },
+          "evaluation_tags": [
+            "explicit_selection"
+          ]
+        },
+        {
+          "query": "更正，刚才选错了，我要查另一张，也就是710006。请以这次选择为准重新查询。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_ambiguous_object_long",
+      "family": "ambiguous_object",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "不足时澄清，随后接收选择与更正",
+      "initial_history_messages": 106,
+      "initial_history_estimated_tokens": 7500,
+      "steps": [
+        {
+          "query": "先看一下这张单的最新物流吧。",
+          "expected": {
+            "kind": "clarify",
+            "target": "",
+            "candidates": [
+              "710005",
+              "710006"
+            ]
+          },
+          "evaluation_tags": [
+            "ambiguity"
+          ]
+        },
+        {
+          "query": "我明确选710005，请实际查询它的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710005"
+          },
+          "evaluation_tags": [
+            "explicit_selection"
+          ]
+        },
+        {
+          "query": "更正，刚才选错了，我要查另一张，也就是710006。请以这次选择为准重新查询。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_tool_authority_freshness_short",
+      "family": "tool_authority_freshness",
+      "cohort": "previously_seen_regression",
+      "stratum": "short",
+      "purpose": "旧助手结论不变成事实；每次新查询消费最新回执",
+      "initial_history_messages": 18,
+      "initial_history_estimated_tokens": 810,
+      "steps": [
+        {
+          "query": "查一下之前登记这单现在的物流，以这次接口结果为准，别复述先前没有核实的签收说法。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710007",
+            "reject_unverified_signed": true
+          },
+          "evaluation_tags": [
+            "freshness"
+          ]
+        },
+        {
+          "query": "再查一下同一单现在有没有新的进展，不要直接沿用上一轮记录。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710007",
+            "reject_unverified_signed": true
+          },
+          "evaluation_tags": [
+            "freshness"
+          ]
+        },
+        {
+          "query": "继续核实刚才这张单，给我本次查询到的最新物流状态。",
+          "expected": {
+            "kind": "logistics_failure",
+            "target": "710007",
+            "reject_unverified_signed": true
+          },
+          "evaluation_tags": [
+            "freshness"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unified_tool_authority_freshness_long",
+      "family": "tool_authority_freshness",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "旧助手结论不变成事实；每次新查询消费最新回执",
+      "initial_history_messages": 106,
+      "initial_history_estimated_tokens": 7525,
+      "steps": [
+        {
+          "query": "查一下之前登记这单现在的物流，以这次接口结果为准，别复述先前没有核实的签收说法。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710007",
+            "reject_unverified_signed": true
+          },
+          "evaluation_tags": [
+            "freshness"
+          ]
+        },
+        {
+          "query": "再查一下同一单现在有没有新的进展，不要直接沿用上一轮记录。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710007",
+            "reject_unverified_signed": true
+          },
+          "evaluation_tags": [
+            "freshness"
+          ]
+        },
+        {
+          "query": "继续核实刚才这张单，给我本次查询到的最新物流状态。",
+          "expected": {
+            "kind": "logistics_failure",
+            "target": "710007",
+            "reject_unverified_signed": true
+          },
+          "evaluation_tags": [
+            "freshness"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hybrid_distant_pure_reference",
+      "family": "distant_pure_reference",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "唯一待办对象的远距离纯指代",
+      "initial_history_messages": 64,
+      "initial_history_estimated_tokens": 3271,
+      "steps": [
+        {
+          "query": "那单到哪了？请实际查一下。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "pure_reference"
+          ]
+        },
+        {
+          "query": "还是那单，再刷新一次物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "pure_reference"
+          ]
+        },
+        {
+          "query": "继续查询它的最新配送情况。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "pure_reference"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hybrid_alias_without_word_overlap",
+      "family": "alias_without_word_overlap",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "别称关系需要跨原文理解",
+      "initial_history_messages": 64,
+      "initial_history_estimated_tokens": 3225,
+      "steps": [
+        {
+          "query": "摄影棚那笔到哪了？请查物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002"
+          },
+          "evaluation_tags": [
+            "alias"
+          ]
+        },
+        {
+          "query": "换成家里那笔，查询最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "alias"
+          ]
+        },
+        {
+          "query": "再查摄影棚那笔的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002"
+          },
+          "evaluation_tags": [
+            "alias"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hybrid_adjacent_correction",
+      "family": "adjacent_correction",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "命中轮紧接的无重复关键词更正",
+      "initial_history_messages": 64,
+      "initial_history_estimated_tokens": 3187,
+      "steps": [
+        {
+          "query": "工作室那单现在到哪了？请查物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        },
+        {
+          "query": "那单再刷新一次物流，别沿用上次结果。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        },
+        {
+          "query": "继续核实它的最新配送进展。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hybrid_ambiguous_pure_reference",
+      "family": "ambiguous_pure_reference",
+      "cohort": "previously_seen_regression",
+      "stratum": "long",
+      "purpose": "两个未选定对象不能靠顺序猜测",
+      "initial_history_messages": 64,
+      "initial_history_estimated_tokens": 3208,
+      "steps": [
+        {
+          "query": "那单到哪了？",
+          "expected": {
+            "kind": "clarify",
+            "target": "",
+            "candidates": [
+              "710005",
+              "710006"
+            ]
+          },
+          "evaluation_tags": [
+            "ambiguity"
+          ]
+        },
+        {
+          "query": "明确选710006，请查询它的最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "explicit_selection"
+          ]
+        },
+        {
+          "query": "继续刷新那单的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "continuity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_ordinary_explicit_delivery",
+      "family": "ordinary_explicit_delivery",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "short",
+      "purpose": "短会话显式订单查询，检查额外记忆开销与普通任务退化",
+      "initial_history_messages": 8,
+      "initial_history_estimated_tokens": 379,
+      "steps": [
+        {
+          "query": "请查询订单710001现在的物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710001"
+          },
+          "evaluation_tags": [
+            "ordinary"
+          ]
+        },
+        {
+          "query": "现在查询订单710004的最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "ordinary"
+          ]
+        },
+        {
+          "query": "请重新查询订单710004当前的配送进展。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "ordinary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_ordinary_explicit_care",
+      "family": "ordinary_explicit_care",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "short",
+      "purpose": "普通会话每问明确型号，无需长期记忆的知识查询",
+      "initial_history_messages": 16,
+      "initial_history_estimated_tokens": 775,
+      "steps": [
+        {
+          "query": "MH-CAM1摄像头的镜头该怎样清洁？请查说明。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-CAM1",
+            "fact_groups": [
+              [
+                "断电",
+                "关闭电源",
+                "切断电源",
+                "拔掉电源"
+              ],
+              [
+                "镜头布",
+                "软布"
+              ],
+              [
+                "镜头"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "ordinary"
+          ]
+        },
+        {
+          "query": "请查MH-FD10喂食器食盆的清洗方法。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-FD10",
+            "fact_groups": [
+              [
+                "断电",
+                "关闭电源",
+                "切断电源",
+                "拔掉电源"
+              ],
+              [
+                "食盆"
+              ],
+              [
+                "拆",
+                "取下"
+              ],
+              [
+                "晾干",
+                "干燥",
+                "擦干"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "ordinary"
+          ]
+        },
+        {
+          "query": "MH-FD10喂食器的机身怎样清洁？请按这个型号说明回答。",
+          "expected": {
+            "kind": "care",
+            "target": "MH-FD10",
+            "fact_groups": [
+              [
+                "机身",
+                "主机"
+              ],
+              [
+                "软布"
+              ],
+              [
+                "擦"
+              ]
+            ]
+          },
+          "evaluation_tags": [
+            "ordinary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_unsummarized_middle_relation",
+      "family": "unsummarized_middle_relation",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "long",
+      "purpose": "未摘要且已离开节点近期输入的中间区关系，检查回查覆盖盲区",
+      "initial_history_messages": 48,
+      "initial_history_estimated_tokens": 2331,
+      "steps": [
+        {
+          "query": "北仓库那笔现在到哪了？请实际查物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008"
+          },
+          "evaluation_tags": [
+            "unsummarized_middle",
+            "relation"
+          ]
+        },
+        {
+          "query": "换查南仓库那笔的最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710001"
+          },
+          "evaluation_tags": [
+            "unsummarized_middle",
+            "relation"
+          ]
+        },
+        {
+          "query": "回到北仓库那笔，再刷新一次物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008"
+          },
+          "evaluation_tags": [
+            "unsummarized_middle",
+            "relation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_nonadjacent_correction",
+      "family": "nonadjacent_correction",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "long",
+      "purpose": "更正与首次登记之间隔四轮资料问答，不能只读取首次命中的相邻轮",
+      "initial_history_messages": 64,
+      "initial_history_estimated_tokens": 3194,
+      "steps": [
+        {
+          "query": "摄影工作室那笔现在到哪了？请用更正后的号码查询。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        },
+        {
+          "query": "同一笔再次刷新物流，不要换回更正前的号码。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        },
+        {
+          "query": "现在看家用那笔的配送进度。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710006"
+          },
+          "evaluation_tags": [
+            "relation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_renamed_location_alias",
+      "family": "renamed_location_alias",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "long",
+      "purpose": "点位改名与订单关系需联合使用，且另一点位不受影响",
+      "initial_history_messages": 60,
+      "initial_history_estimated_tokens": 3007,
+      "steps": [
+        {
+          "query": "书房店那笔到哪了？请查询物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "alias"
+          ]
+        },
+        {
+          "query": "再查询白露点那笔的最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008"
+          },
+          "evaluation_tags": [
+            "alias"
+          ]
+        },
+        {
+          "query": "回到书房店那笔，重新核实配送进展。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710003"
+          },
+          "evaluation_tags": [
+            "alias"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_sole_pending_pure_reference",
+      "family": "sole_pending_pure_reference",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "long",
+      "purpose": "长会话唯一待查对象以纯指代恢复，检验摘要的背景作用",
+      "initial_history_messages": 62,
+      "initial_history_estimated_tokens": 3131,
+      "steps": [
+        {
+          "query": "那单到哪了？请实际查一下。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008"
+          },
+          "evaluation_tags": [
+            "pure_reference"
+          ]
+        },
+        {
+          "query": "还是那单，再刷新一下。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008"
+          },
+          "evaluation_tags": [
+            "pure_reference"
+          ]
+        },
+        {
+          "query": "它现在有什么新的进展？再查一下。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008"
+          },
+          "evaluation_tags": [
+            "pure_reference"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_scoped_readonly_retraction",
+      "family": "scoped_readonly_retraction",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "long",
+      "purpose": "部分撤回仍无正向办理授权，只考察正确查询且不提议或执行写操作",
+      "initial_history_messages": 58,
+      "initial_history_estimated_tokens": 2905,
+      "steps": [
+        {
+          "query": "先查工作室那单最新物流，仍然不要催单和开工单。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002",
+            "active_constraints": {
+              "710002": [
+                "ticket",
+                "expedite"
+              ],
+              "710008": [
+                "ticket",
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        },
+        {
+          "query": "只撤回家用那单不能开工单这一项，工作室限制不变。但本轮只查家用那单物流，尚未授权办理。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710008",
+            "active_constraints": {
+              "710002": [
+                "ticket",
+                "expedite"
+              ],
+              "710008": [
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        },
+        {
+          "query": "换回工作室那单，刷新物流，之前针对它的限制继续有效。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710002",
+            "active_constraints": {
+              "710002": [
+                "ticket",
+                "expedite"
+              ],
+              "710008": [
+                "expedite"
+              ]
+            }
+          },
+          "evaluation_tags": [
+            "restriction"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keep3_same_alias_ambiguous_orders",
+      "family": "same_alias_ambiguous_orders",
+      "cohort": "new_internal_predeclared_probe",
+      "stratum": "long",
+      "purpose": "同一用途仍有两个未选候选，先澄清，再接收显式选择与更正",
+      "initial_history_messages": 56,
+      "initial_history_estimated_tokens": 2772,
+      "steps": [
+        {
+          "query": "北仓库那单到哪了？",
+          "expected": {
+            "kind": "clarify",
+            "target": "",
+            "candidates": [
+              "710001",
+              "710004"
+            ]
+          },
+          "evaluation_tags": [
+            "ambiguity"
+          ]
+        },
+        {
+          "query": "明确选710001，请查最新物流。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710001"
+          },
+          "evaluation_tags": [
+            "explicit_selection"
+          ]
+        },
+        {
+          "query": "刚才选错，改成710004，重新查这张单。",
+          "expected": {
+            "kind": "logistics",
+            "target": "710004"
+          },
+          "evaluation_tags": [
+            "correction"
+          ]
+        }
+      ]
+    }
+  ]
+}
