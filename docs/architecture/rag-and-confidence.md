@@ -2,7 +2,13 @@
 
 知识问答依次经过资料分块、向量化、混合检索、重排、证据检查和回答生成。本页按存储、模型选型、检索策略与评估说明实现。
 
-实验入口：[五模型 Embedding 对比](../evaluation/embedding/README.md) · [RAG 四策略评估](../evaluation/rag/README.md)。
+离线阶段先根据 Markdown 标题进行层级切分，正文采用递归切块和完整句子重叠，表格则保留表头后按行拆分，尽量保证检索单元保留完整的业务含义。
+
+在线阶段使用 BGE-M3 生成 Dense 向量，同时通过 Milvus 的 BM25 Function 进行 Sparse 检索。两路各召回候选，再使用 RRF 融合排名，最后经过 BGE-Reranker-v2-M3 重排，默认选取前十条证据。
+
+采用混合检索，是因为用户可能使用口语表达，但商品型号和具体政策条款又非常依赖精确词项匹配。RRF 解决两路分数尺度不一致的问题，Reranker 进一步改善候选排序。
+
+实验入口：[四模型 Embedding 对比](../evaluation/embedding/README.md) · [RAG 四策略评估](../evaluation/rag/README.md)。
 
 源码核对基线：[fcfdd41](https://github.com/Orange-ui0811/caremate/commit/fcfdd419b4736a189e65b7cee2fdd52691fb194e)。源码链接固定到该提交，实验结果的适用范围见下文。
 
