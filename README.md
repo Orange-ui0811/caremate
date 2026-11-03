@@ -25,8 +25,7 @@
 系统采用 **Workflow + Single-Agent** 混合架构：
 
 - 确定性 Workflow 保证必要业务顺序。
-- 主 Agent 根据上下文和工具回执动态选择下一步。
-- 统一工具执行层负责参数校验、权限检查与结果回传。
+- Agent 通过 Function Calling 产生结构化工具请求，后端执行后将结果封装为 ToolMessage，再交给模型继续判断，形成一个 ReAct 式工具循环。
 
 ```mermaid
 flowchart TD
