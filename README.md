@@ -52,7 +52,6 @@ flowchart TD
     S --> O
 
     K -.-> V["Milvus"]
-    E -.-> DB["MySQL"]
     A -.-> LF["Langfuse"]
 ```
 
