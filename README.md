@@ -30,7 +30,7 @@
 
 ```mermaid
 flowchart TD
-    U["用户输入"] --> C["指代补全"] --> I{"九类意图识别"}
+    U["用户输入"] --> C["指代补全"] --> I{"意图识别"}
 
     I -->|商品咨询| K["RAG 检索 + 证据检查"]
     I -->|退款 / 售后| P["订单验证 + 政策检索"]
@@ -53,7 +53,6 @@ flowchart TD
 
     K -.-> V["Milvus"]
     E -.-> DB["MySQL"]
-    I -.-> CP["SQLite Checkpointer"]
     A -.-> LF["Langfuse"]
 ```
 
