@@ -1,6 +1,6 @@
-# 五模型 Embedding 对比
+# Embedding 对比
 
-实验日期：2026-10-22。固定 52 个知识片段、300 道题；A/B/C/E 各 60，共 240 道可答题计算质量指标，D 桶仅记录分数分布。五模型最终 API 运行均已完成。机器可读汇总见 [results.json](results.json)，输入协议见 [protocol.json](protocol.json)。
+实验日期：固定 52 个知识片段、300 道题；A/B/C/E 各 60，共 240 道可答题计算质量指标，D 桶仅记录分数分布。五模型最终 API 运行均已完成。机器可读汇总见 [results.json](results.json)，输入协议见 [protocol.json](protocol.json)。
 
 ## 问题设计与控制条件
 
@@ -13,7 +13,6 @@
 | --- | --- | ---: |
 | BGE-M3 | 原问题 | 1024 |
 | BGE-small-zh-v1.5 | 中文检索前缀＋原问题 | 512 |
-| BGE-large-zh-v1.5 | 中文检索前缀＋原问题 | 1024 |
 | Qwen3-Embedding-0.6B | 英文任务指令＋原问题 | 1024 |
 | Qwen3-Embedding-4B | 英文任务指令＋原问题，显式请求 2560 维 | 2560 |
 
@@ -25,7 +24,6 @@ Qwen3-4B 最初默认返回 1024 维，维度探测后用显式 2560 维重跑�
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BGE-M3 | **98.96%** | 0.8444 | 99.79% | 3.84 | 17.17 | 21.02 |
 | BGE-small-zh-v1.5 | 92.01% | 0.7391 | 96.88% | 2.02 | 10.35 | 12.37 |
-| BGE-large-zh-v1.5 | 97.92% | 0.8511 | 100.00% | 2.35 | 13.06 | 15.42 |
 | Qwen3-Embedding-0.6B | 97.99% | **0.8624** | 99.86% | 2.80 | 14.38 | 17.18 |
 | Qwen3-Embedding-4B | 97.64% | 0.8468 | 99.65% | 4.04 | 19.10 | 23.14 |
 
@@ -37,7 +35,6 @@ M3 在这份题集的 Recall@5 较高，Qwen0.6B 的分组排名较高；不同�
 | --- | ---: | ---: | ---: | ---: |
 | BGE-M3 | 100.00% | 100.00% | 100.00% | 95.83% |
 | BGE-small-zh-v1.5 | 98.33% | 83.33% | 98.33% | 88.06% |
-| BGE-large-zh-v1.5 | 100.00% | 100.00% | 96.67% | 95.00% |
 | Qwen3-Embedding-0.6B | 100.00% | 100.00% | 100.00% | 91.94% |
 | Qwen3-Embedding-4B | 100.00% | 100.00% | 100.00% | 90.56% |
 
@@ -57,6 +54,5 @@ small 的具体型号与多证据召回较低；M3 在本次总体 Recall@5 和 
 
 - [BGE-M3](https://huggingface.co/BAAI/bge-m3)
 - [BGE-small-zh-v1.5](https://huggingface.co/BAAI/bge-small-zh-v1.5)
-- [BGE-large-zh-v1.5](https://huggingface.co/BAAI/bge-large-zh-v1.5)
 - [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
 - [Qwen3-Embedding-4B](https://huggingface.co/Qwen/Qwen3-Embedding-4B)
