@@ -29,3 +29,7 @@
 | 总 Token | 该工作负载记录到的模型输入与输出；维护、重试和缺失 usage 按报告说明计入 |
 
 各实验独立记录数据版本、方法条件与运行日期。报告提供历史结果汇总和合成题目设计；原始逐次调用、完整预置历史与运行环境由各实验归档管理。源码与当前方案的对应关系见[架构文档](../architecture/README.md)。
+
+## 材料版本索引
+
+[material-index.json](material-index.json)记录三个公开结果文件的 SHA-256、原归档摘要和日期。原实验 Git SHA 尚未保存在这些汇总字段中，索引使用 null；代码导航版本另行记录，不替代原实验运行版本。Embedding 的模型、前缀、维度见[protocol.json](embedding/protocol.json)，上下文的模型和夹具条件见[results.json](context/results.json)。本次文档整理未重新运行历史模型评测。

@@ -1,68 +1,89 @@
-# 智能客服
+# 客小助 · CareMate
 
-面向电商场景的智能客服，支持商品与政策问答、订单和物流查询、退换货与售后咨询、选单与工单确认，以及未解决问题的归集审核。知识问答展示来源引用，多轮对话结合摘要、近期原话和相关历史理解用户诉求。
+**可控式 Workflow–Agent 智能客服系统**
 
-系统采用 **LangGraph Workflow＋Agent**：必要的业务步骤由程序编排，模型在工具执行结果的基础上继续处理。
+面向电商场景，支持商品与政策问答、订单物流查询、退换货咨询、选单与工单确认，以及未解决问题的归集审核。采用 **LangGraph + LangChain + MCP**：必要步骤由程序编排，单主 Agent 根据工具回执继续决策，知识回答提供来源引用。
 
-演示业务使用模拟订单、商品、物流及部分售后数据；工单写入 MySQL，退款入口登记申请工单，支付退款由外部业务流程处理。
+[功能演示](docs/demo/README.md) · [工具执行设计](docs/engineering/tool-execution.md) · [架构与源码](docs/architecture/README.md) · [实验报告](docs/evaluation/README.md) · [部署](DEPLOY.md)
 
-## 从这里阅读
+## 实验摘要
 
-按“流程 → 知识检索 → 上下文 → 知识反馈”了解系统；各模块都提供源码入口和相关结果。
-
-| 顺序 | 内容 | 入口 |
+| 结果 | 统计条件 | 依据 |
 | --- | --- | --- |
-| 1 | Workflow、四个组件与工具执行 | [架构详解](docs/architecture/workflow-and-agent.md) · [源码索引](docs/architecture/source-map.md) |
-| 2 | 知识存储、分块、Embedding 选型与混合检索 | [RAG 与证据评估](docs/architecture/rag-and-confidence.md) |
-| 3 | 滚动摘要、滑窗、原文回查及连续任务 | [上下文工程](docs/architecture/context-engineering.md) |
-| 4 | 问题归并、人工核准与主题分类 | [知识反馈](docs/architecture/feedback-and-classifier.md) |
-| 5 | 实验结果、问题设计与统计方法 | [实验与评估](docs/evaluation/README.md) |
-| 6 | 环境准备与功能页面 | [部署说明](DEPLOY.md) · [模块导航](docs/architecture/README.md) |
+| **98.4%** 分组 Recall@5 | 2026-10-11；52 知识片段，300 题中 240 道可答题；混合检索＋重排 | [RAG 四策略](docs/evaluation/rag/README.md) |
+| **93.7%** 答案要点覆盖 | 同一 RAG 实验，模型裁判评价标准要点覆盖 | [结果与问题设计](docs/evaluation/rag/README.md) |
+| **70/72** 连续任务通过 | 2026-10-27/28；24 段合成会话，每段三问；开发验证版摘要＋滑窗＋回查 | [上下文四方法](docs/evaluation/context/README.md) |
 
-## 系统做什么
+以上为固定内部实验结果。检索命中、答案覆盖与连续任务是不同指标；上下文开发验证版与公开应用的对应关系见[版本表](docs/architecture/context-engineering.md#版本与材料)。
 
-- **Workflow 与 Agent：**九类意图映射到五条路线，知识咨询先检索，退款/售后先确定订单并获取政策，再进入主 Agent；模型通过工具结果逐步决定下一步。
-- **RAG：**组合向量与 BM25 检索、RRF 融合、重排和查询改写；知识分支使用候选最高重排分粗筛与生成前语义自检，返回带编号的证据引用。
-- **工具执行：**统一注册本地与 MCP 工具，执行参数校验、可信参数注入、超时和有限重试；创建工单需要用户确认。
-- **上下文与交互：**滚动摘要、近期原文滑窗与相关原文回查协同处理多轮问题，结合指代补全、SSE 和暂停恢复；实现与版本对应见[上下文工程](docs/architecture/context-engineering.md)。
-- **知识反馈：**将未解决问题与可获得的检索快照归集到待审流程，人工审核后补充知识；17 类主题分类器用于旁路归类，不代替在线九类意图识别。
-- **运行观测：**接入 Langfuse，按会话与意图追踪执行并统计 Token。金额分析需要正确的模型价格和用量口径。
+## 系统架构
 
-## 架构分工
+```mermaid
+flowchart TB
+    UI[客服与管理页面] --> API[FastAPI / SSE]
+    API --> GRAPH[LangGraph：状态、分支、暂停恢复]
+    GRAPH --> AGENT[单主 Agent / LangChain]
+    GRAPH --> RAG[知识检索与证据检查]
+    AGENT --> EXEC[工具注册与受控执行]
+    EXEC --> LOCAL[5 个内置业务工具]
+    EXEC --> MCP[MCP 客户端]
+    MCP --> SERVICES[物流与售后独立服务：3 个工具]
+    RAG --> MILVUS[Milvus：Dense / BM25]
+    LOCAL --> MYSQL[MySQL：工单与业务记录]
+    RAG --> MYSQL
+    GRAPH --> SQLITE[SQLite Checkpointer]
+    GRAPH -.调用追踪.-> OBS[Langfuse]
+```
 
-| 层 | 技术与职责 | 核心代码 |
+订单、商品、物流及部分售后使用模拟数据；工单确认后写入 MySQL。退款工具展示申请表单，支付退款由外部业务流程处理。MCP 可发现的业务工具正常情况下共 8 个，实际数量取决于服务可达性。
+
+## 一条请求如何执行
+
+```mermaid
+flowchart TD
+    Q([用户问题]) --> R[指代补全] --> I[九类主意图]
+    I -->|商品咨询| K[强制知识检索与两道证据检查]
+    K -->|通过| A[主 Agent]
+    K -->|不足| F[固定兜底与人工入口]
+    I -->|退款退货 / 售后| O[取订单：必要时暂停选单]
+    O --> P[强制检索政策] --> A
+    I -->|订单 / 物流 / 人工| A
+    I -->|投诉| C[固定安抚与操作入口]
+    I -->|闲聊 / 其他| S[固定引导]
+    A --> D{工具请求且未达步数上限?}
+    D -->|是| T[工具节点：校验、确认、执行]
+    T -->|ToolMessage| A
+    D -->|否| L[保存回答与决策日志]
+    F --> L
+    C --> L
+    S --> L
+    L --> E([结束本轮])
+```
+
+五条业务路线由代码规定；Agent 循环中由模型选择工具。创建工单会暂停等待确认。确定性节点也可以调用 LLM，例如政策检索前的查询扩写。
+
+## 设计决策、实现与验证
+
+| 工程问题 | 设计与源码 | 验证材料 |
 | --- | --- | --- |
-| HTTP 与流式交互 | FastAPI、SSE | [app/api](app/api)、[runtime.py](app/graph/runtime.py) |
-| 业务编排 | LangGraph 状态、分支、检查点与暂停恢复 | [build.py](app/graph/build.py)、[state.py](app/graph/state.py) |
-| 模型交互 | LangChain 提示词、模型、结构化输出、工具消息 | [llm.py](app/core/llm.py)、[prompts.py](app/core/prompts.py) |
-| Agent 循环 | 主模型决策 → 工具执行 → 结果回传 → 再决策 | [nodes.py](app/graph/nodes.py)、[routing.py](app/graph/routing.py) |
-| 工具接入 | 内置工具、MCP 动态发现、统一执行引擎 | [app/tools](app/tools)、[mcp_servers](mcp_servers) |
-| 检索与存储 | Milvus、MySQL、SQLite 检查点 | [retrieval.py](app/core/retrieval.py)、[app/db](app/db) |
-| 观测 | Langfuse 回调、意图标签与 Token 报表 | [observability.py](app/core/observability.py)、[cost_by_intent.py](scripts/cost_by_intent.py) |
+| 如何保证必要业务顺序？ | [图编排](app/graph/build.py)、[五路映射](app/graph/routing.py) | [路由测试](tests/graph/test_routing.py) |
+| 如何组织消息、固定字段与工具请求？ | [提示词](app/core/prompts.py)、[结构化封装](app/core/llm.py)、[主 Agent](app/graph/nodes.py) | [四组件说明](docs/architecture/workflow-and-agent.md) |
+| 模型请求怎样进入受控执行？ | [注册表](app/tools/registry.py)、[执行引擎](app/tools/engine.py) | [执行测试](tests/tools/test_engine.py)、[确认与取消](tests/graph/test_ch08_confirm_ticket.py) |
+| 如何同时覆盖口语与精确型号？ | [混合检索与重排](app/core/retrieval.py) | [五模型选型](docs/evaluation/embedding/README.md)、[四策略比较](docs/evaluation/rag/README.md) |
+| 如何判断检索材料足够作答？ | [最高重排分](app/core/confidence.py)、[语义自检](app/core/selfcheck.py) | [证据门控说明](docs/architecture/rag-and-confidence.md) |
+| 如何保留长对话中的更正与限制？ | [摘要、窗口与回查](docs/architecture/context-engineering.md) | [任务设计与四方法结果](docs/evaluation/context/README.md) |
+| 如何把未解决问题用于补知识？ | [标准化与归并](app/core/flywheel.py)、[人工核准](app/api/review.py) | [知识反馈与主题分类](docs/architecture/feedback-and-classifier.md) |
 
-### 五条处理路线
+## 功能演示
 
-公共前置步骤是“用户问题 → 指代补全 → 意图识别”。
+| 输入 | 观察重点 | 操作说明 |
+| --- | --- | --- |
+| `订单 1001 的物流到哪了？` | 订单号 → 物流单号 → MCP 物流回执 | [物流工具组合](docs/demo/README.md#物流工具组合) |
+| `我要退货，但我不记得订单号了。` | 选单中断、恢复、政策检索 | [退货选单](docs/demo/README.md#退货选单) |
+| `你们卖活体宠物吗？` | 路由、证据检查与回答依据 | [证据不足场景](docs/demo/README.md#证据不足场景) |
+| `帮我建售后工单，猫砂盆漏电，需要人工处理。` | 工单预览、取消与写入控制 | [工单确认与取消](docs/demo/README.md#工单确认与取消) |
 
-| 意图 | 后续处理 |
-| --- | --- |
-| 商品咨询 | 知识检索 → 证据判断 → 主 Agent 或固定兜底 |
-| 退款退货、售后 | 确定订单 → 检索政策 → 主 Agent |
-| 订单、物流、人工 | 主 Agent 按需选择工具 |
-| 投诉 | 固定安抚与后续操作入口 |
-| 闲聊、其他 | 固定引导话术 |
-
-主 Agent 通过 Function Calling 提出行动请求，后端执行后将结果写成 ToolMessage，再请求模型继续处理。没有工具请求或达到步数上限时结束。该循环由一个主 Agent 执行，以结构化工具请求驱动。
-
-### 八个业务工具
-
-| 来源 | 工具 |
-| --- | --- |
-| 内置 | `query_order`、`query_product`、`query_faq`、`submit_refund`、`create_ticket` |
-| 物流 MCP 服务 | `query_logistics` |
-| 售后 MCP 服务 | `query_warranty`、`query_return_status` |
-
-实际绑定数量取决于当时 MCP 服务的发现结果。`submit_refund` 在图中转换为前端表单；`create_ticket` 确认后写入 MySQL。
+场景表描述预期行为；真实模型的具体工具顺序以现场回执为准。[运行准备与故障处理](docs/demo/runbook.md)提供操作步骤，[核心回归记录](docs/demo/assets/core-tests-20261103.md)提供隔离测试证据。
 
 ## 本地运行
 
@@ -95,46 +116,16 @@ make dev
 
 上表为本机运行地址。Compose 提供开发环境，外部部署的凭据、鉴权与网络设置见部署说明。
 
-## 实验结果与问题设计
 
-| 实验 | 固定数据与比较范围 | 报告 |
-| --- | --- | --- |
-| RAG 四策略 | 300 题、五桶；240 可答题的检索、证据与答案覆盖 | [四策略结果与五桶设计](docs/evaluation/rag/README.md) |
-| 五模型 Embedding | 同 52 知识片段和 300 题；纯向量精确余弦排序 | [模型、维度、输入协议与分桶结果](docs/evaluation/embedding/README.md) |
-| 上下文四方法 | 同 24 段合成会话，每段三次连续追问；含维护成本 | [四方法对照与测试场景](docs/evaluation/context/README.md) |
+## 验证与实现范围
 
-各报告分别记录实验日期、数据规模、输入协议与统计范围；结果来自对应版本的内部实验。上下文用量缺失的记录以总 Token 下界表示。
+[核心回归 CI](.github/workflows/ci.yml)运行无需真实密钥、MySQL 或 Milvus 的精选测试；完整测试及真实模型评测按[部署说明](DEPLOY.md)准备依赖。测试替身验证控制逻辑，真实服务表现通过独立 Demo 和评测记录核对。
 
-## 验证与结果口径
+| 材料 | 状态 |
+| --- | --- |
+| Workflow、8 个业务工具、MCP 接入与工单确认 | 公开应用源码及对应测试 |
+| 滚动摘要、滑窗、指代补全 | 公开基础实现 |
+| BM25 历史原文回查及四方法结果 | 开发验证版；提供[代码摘录](docs/architecture/code-excerpts/context-recall.md)，完整接线尚未同步公开应用 |
+| Agent Skills、Prompt 统一回归、按意图工具白名单 | 后续方向，当前不作为已实现能力 |
 
-```bash
-make test
-make help
-```
-
-`make test` 执行项目测试；真实模型、检索与分类器评估另有前置条件，参见部署说明和架构文档。测试运行与真实服务验收分开记录，具体环境和检查范围以运行结果为准。
-
-固定问集、方法对照和统计定义统一收录在[实验与评估](docs/evaluation/README.md)。
-
-## 目录
-
-```text
-app/api/          HTTP 与 SSE 接口
-app/graph/        状态、节点、路由和图运行
-app/core/         模型、检索、上下文、反馈与观测
-app/tools/        工具注册、实现、MCP 客户端与执行引擎
-app/db/           数据模型与仓储
-app/static/       客服与管理页面
-mcp_servers/      独立物流和售后服务
-scripts/          初始化、评估、训练与报表
-sql/              数据库初始化与迁移
-tests/            测试与测试数据
-docs/architecture/   架构说明及源码索引
-```
-
-
-## 代码与数据
-
-仓库提供应用基础源码、前端、MCP 服务、部署脚本、测试与示例知识，以及实验汇总和合成题目设计。运行配置、业务数据库与训练权重由使用者准备。上下文新回查目前以实现说明和代码摘录提供，应用接线与基础源码的对应关系见[版本说明](docs/architecture/context-engineering.md#版本与材料)。
-
-定位实现可使用 [框架源码索引](docs/architecture/source-map.md)，该页面直接链接仓库中的实际函数。
+基础工程来源、变更材料和发布范围见[项目来源](docs/PROJECT-SOURCES.md)与[变更依据](docs/CONTRIBUTIONS.md)。本仓库的架构说明描述系统行为，提交记录描述具体变更。

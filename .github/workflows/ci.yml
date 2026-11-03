@@ -1,0 +1,41 @@
+name: Core regression
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CHAT_MODEL: offline-test
+      CHAT_BASE_URL: http://127.0.0.1:1/v1
+      CHAT_API_KEY: offline-placeholder
+      EMBED_API_KEY: offline-placeholder
+      RERANK_API_KEY: offline-placeholder
+      LANGFUSE_PUBLIC_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --group dev
+      - name: Routing, execution, ownership and confirmation
+        run: >-
+          uv run --no-sync python -m pytest
+          tests/graph/test_routing.py
+          tests/graph/test_ch08_confirm_ticket.py
+          tests/tools/test_engine.py
+          tests/tools/test_registry.py
+          tests/tools/test_mcp_client.py
+          tests/tools/test_order_ownership.py
+          tests/core/test_confidence.py
+          tests/core/test_runtime_settings.py
+          -q --junitxml=core-tests.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-tests
+          path: core-tests.xml
