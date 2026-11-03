@@ -20,7 +20,7 @@
 | 新回查：BM25、邻轮扩展、逐节点去重 | [当前实现代码摘录](code-excerpts/context-recall.md#recall) | Top3 命中、前后邻轮、可见消息 ID、来源引用 |
 | 新回查怎样接进各节点 | [节点接入代码摘录](code-excerpts/context-recall.md#integration) | 先确定节点窗口，再补充该节点缺少的原话 |
 
-## 三类历史材料各有什么作用
+## 分层记忆设计
 
 | 材料 | 保留什么 | 主要作用 |
 | --- | --- | --- |
