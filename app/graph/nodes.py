@@ -425,6 +425,8 @@ async def main_agent(state, config=None) -> dict:
     if context_runtime.enabled() and settings.context_recovery_tools_enabled:
         from app.tools.context import get_context_specs
         specs = [*specs, *get_context_specs(state.get("current_message_id"))]
+    if state.get('task_scope'):
+        specs = [s for s in specs if s.name in state['task_scope']['allowed_tools']]
     model = get_chat_model(streaming=True).bind_tools([s.tool for s in specs])
     try:
         msgs = _agent_messages(state, tool_schemas=[s.json_schema for s in specs])
@@ -456,6 +458,13 @@ async def agent_tools(state) -> dict:
     范式);参数缺则交引擎按「校验拦下」回灌,模型自然向用户追问,不弹卡。
     submit_refund 仍拦成前端退款表单(ch06 语义不变)。"""
     last = state["messages"][-1]
+    if state.get('task_scope'):
+        from app.graph.read_subflows import denied_call
+        violations = [denied_call(state, tc) for tc in last.tool_calls]
+        if any(violations):
+            return {'messages': [ToolMessage(content=reason or '同批调用包含越界请求，请按当前任务重试。',
+                tool_call_id=tc['id'], name=tc['name'], status='error')
+                for tc, reason in zip(last.tool_calls, violations)]}
     cid = state.get("conversation_id", 0)
     uid = state.get("user_id", "")
     specs = {s.name: s for s in await registry.get_all_specs()}   # ch08:执行侧同样现拉
