@@ -1,0 +1,388 @@
+{
+  "experiment": "four-context-methods-display",
+  "compiled_at": "2026-10-28",
+  "source_artifact_sha256": "eea03ea875c0901f84ffb70d9bef37b017f149c2a9fc6ea8cc0ce18fa0ab343f",
+  "dataset_digest": "1dcf9bef73590e11c2f5cbcb0d8ef92b5577202baae421a08bf66ac7a68add34",
+  "cases": 24,
+  "followups_per_case": 3,
+  "evaluated_followups_per_method": 72,
+  "new_model_calls_for_publication": 0,
+  "rows": [
+    {
+      "key": "full",
+      "method": "完整历史",
+      "source_run_date": "2026-10-27",
+      "task": {
+        "pass": 71,
+        "denominator": 72,
+        "rate": 0.9861111111111112,
+        "missing_records": 0
+      },
+      "episodes": {
+        "pass": 23,
+        "denominator": 24,
+        "rate": 0.9583333333333334
+      },
+      "cost": {
+        "model_calls": 242,
+        "input_tokens": 631053,
+        "output_tokens": 10387,
+        "unknown_input_calls": 1,
+        "unknown_output_calls": 1,
+        "unknown_usage_calls": 1,
+        "total_tokens": 641440,
+        "possible_unreported_attempts": true,
+        "cost_complete": false,
+        "total_is_lower_bound": true
+      },
+      "summary_cost": {
+        "model_calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 0,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "scenario_metrics": {
+        "correction_task": {
+          "pass": 10,
+          "denominator": 10,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "correction_no_wrong_order_read": {
+          "pass": 10,
+          "denominator": 10,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "restriction_task": {
+          "pass": 9,
+          "denominator": 9,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "restriction_target_query": {
+          "pass": 9,
+          "denominator": 9,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "restriction_no_write_proposal_or_execution": {
+          "pass": 9,
+          "denominator": 9,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_task": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_requested": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_no_order_read": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        }
+      }
+    },
+    {
+      "key": "window",
+      "method": "仅滑动窗口",
+      "source_run_date": "2026-10-27",
+      "task": {
+        "pass": 34,
+        "denominator": 72,
+        "rate": 0.4722222222222222,
+        "missing_records": 0
+      },
+      "episodes": {
+        "pass": 9,
+        "denominator": 24,
+        "rate": 0.375
+      },
+      "cost": {
+        "model_calls": 233,
+        "input_tokens": 278385,
+        "output_tokens": 8577,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 286962,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "summary_cost": {
+        "model_calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 0,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "scenario_metrics": {
+        "correction_task": {
+          "pass": 4,
+          "denominator": 10,
+          "rate": 0.4,
+          "missing_records": 0
+        },
+        "correction_no_wrong_order_read": {
+          "pass": 10,
+          "denominator": 10,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "restriction_task": {
+          "pass": 5,
+          "denominator": 9,
+          "rate": 0.5555555555555556,
+          "missing_records": 0
+        },
+        "restriction_target_query": {
+          "pass": 5,
+          "denominator": 9,
+          "rate": 0.5555555555555556,
+          "missing_records": 0
+        },
+        "restriction_no_write_proposal_or_execution": {
+          "pass": 9,
+          "denominator": 9,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_task": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_requested": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_no_order_read": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        }
+      }
+    },
+    {
+      "key": "summary",
+      "method": "滚动摘要＋滑窗",
+      "source_run_date": "2026-10-27",
+      "task": {
+        "pass": 59,
+        "denominator": 72,
+        "rate": 0.8194444444444444,
+        "missing_records": 0
+      },
+      "episodes": {
+        "pass": 18,
+        "denominator": 24,
+        "rate": 0.75
+      },
+      "cost": {
+        "model_calls": 279,
+        "input_tokens": 383059,
+        "output_tokens": 19989,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 403048,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "summary_cost": {
+        "model_calls": 44,
+        "input_tokens": 59355,
+        "output_tokens": 9883,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 69238,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "scenario_metrics": {
+        "correction_task": {
+          "pass": 7,
+          "denominator": 10,
+          "rate": 0.7,
+          "missing_records": 0
+        },
+        "correction_no_wrong_order_read": {
+          "pass": 10,
+          "denominator": 10,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "restriction_task": {
+          "pass": 8,
+          "denominator": 9,
+          "rate": 0.8888888888888888,
+          "missing_records": 0
+        },
+        "restriction_target_query": {
+          "pass": 8,
+          "denominator": 9,
+          "rate": 0.8888888888888888,
+          "missing_records": 0
+        },
+        "restriction_no_write_proposal_or_execution": {
+          "pass": 9,
+          "denominator": 9,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_task": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_requested": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_no_order_read": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        }
+      }
+    },
+    {
+      "key": "new_hybrid",
+      "method": "滚动摘要＋滑窗＋新回查",
+      "source_run_date": "2026-10-28",
+      "task": {
+        "pass": 70,
+        "denominator": 72,
+        "rate": 0.9722222222222222,
+        "missing_records": 0
+      },
+      "episodes": {
+        "pass": 22,
+        "denominator": 24,
+        "rate": 0.9166666666666666
+      },
+      "cost": {
+        "model_calls": 283,
+        "input_tokens": 458651,
+        "output_tokens": 20639,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 479290,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "summary_cost": {
+        "model_calls": 44,
+        "input_tokens": 58874,
+        "output_tokens": 9895,
+        "unknown_input_calls": 0,
+        "unknown_output_calls": 0,
+        "unknown_usage_calls": 0,
+        "total_tokens": 68769,
+        "possible_unreported_attempts": false,
+        "cost_complete": true,
+        "total_is_lower_bound": false
+      },
+      "scenario_metrics": {
+        "correction_task": {
+          "pass": 10,
+          "denominator": 10,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "correction_no_wrong_order_read": {
+          "pass": 10,
+          "denominator": 10,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "restriction_task": {
+          "pass": 7,
+          "denominator": 9,
+          "rate": 0.7777777777777778,
+          "missing_records": 0
+        },
+        "restriction_target_query": {
+          "pass": 7,
+          "denominator": 9,
+          "rate": 0.7777777777777778,
+          "missing_records": 0
+        },
+        "restriction_no_write_proposal_or_execution": {
+          "pass": 9,
+          "denominator": 9,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_task": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_requested": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        },
+        "clarification_no_order_read": {
+          "pass": 4,
+          "denominator": 4,
+          "rate": 1.0,
+          "missing_records": 0
+        }
+      }
+    }
+  ],
+  "scope": "Real model and LangGraph/SSE; synthetic isolated DB, retrieval and dynamic business tools.",
+  "conditions": {
+    "model": "DeepSeek-V4-Flash",
+    "thinking": false,
+    "replicates": 1,
+    "fresh_business_evidence_shared_fixture": true,
+    "baselines_reused_not_rerun": true
+  },
+  "token_scope": "Seed summary preparation, follow-ups, maintenance and recorded retries; excludes seed-history generation and actual retrieval/business service costs.",
+  "limitations": [
+    "Internal synthetic and regression cases; not external blind evaluation.",
+    "Different stages and independent single generations; not a synchronous multi-replicate ablation.",
+    "Full-history cost is a lower bound due to one ReadTimeout with missing usage.",
+    "Reported rule pass is not production customer-service accuracy.",
+    "Published catalog omits full seed histories and original per-call records."
+  ]
+}

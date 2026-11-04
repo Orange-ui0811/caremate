@@ -1,0 +1,57 @@
+{
+  "status": "completed",
+  "execution_backend": "existing API, no local model downloads",
+  "snapshot_sha256": "8edae5f0b73c6be5fd9d6772a700632ab46308716fa79e0e8576771712661458",
+  "documents": 52,
+  "samples": 300,
+  "answerable": 240,
+  "scope": "pure dense retrieval; exact normalized cosine over all 52 documents; stable descending top10",
+  "excluded": [
+    "query rewriting",
+    "query splitting",
+    "BM25",
+    "RRF",
+    "reranking",
+    "answer generation",
+    "database writes"
+  ],
+  "document_text": "category + newline + questions + newline + answer",
+  "query_text": {
+    "m3": "<query>",
+    "small": "为这个句子生成表示以用于检索相关文章：<query>",
+    "large": "为这个句子生成表示以用于检索相关文章：<query>",
+    "qwen06": "Instruct: Given an e-commerce customer question, retrieve relevant knowledge base passages that answer the question.\nQuery: <query>",
+    "qwen4": "Instruct: Given an e-commerce customer question, retrieve relevant knowledge base passages that answer the question.\nQuery: <query>"
+  },
+  "model_ids": {
+    "m3": "bge-m3",
+    "small": "bge-small-zh-v1.5",
+    "large": "bge-large-zh-v1.5",
+    "qwen06": "Qwen3-Embedding-0.6B",
+    "qwen4": "Qwen3-Embedding-4B"
+  },
+  "dimensions": {
+    "m3": 1024,
+    "small": 512,
+    "large": 1024,
+    "qwen06": 1024,
+    "qwen4": 2560
+  },
+  "dimension_probe": "Qwen3-4B API default is 1024; explicit dimensions=2560 returned 2560. Final scored run uses explicit 2560. See dimension-probe.json.",
+  "quality_metrics": {
+    "Recall@5": "For each question: fraction of required evidence groups first found at ranks 1..5; macro mean over 240 questions.",
+    "MRR@10": "For each question: mean reciprocal first-hit rank over required evidence groups, missing by rank10 contributes zero; macro mean over 240 questions. This is multi-group MRR, not just the first hit of any group.",
+    "evidence_coverage@10": "Fraction of expect_points that occur as literal substrings after whitespace removal in concatenated top10 questions:answer text, macro mean over 240 questions; mechanical coverage, not semantic/answer correctness."
+  },
+  "labels": "Section substring aliases OR within each group; multiple groups required. D_absent excluded from quality metrics.",
+  "timing": "352 texts/model, 52 documents + 300 queries; batch8; 7 document and 38 query calls; sequential single pass, no warmup; elapsed network + queue + inference + retries. Not single-query latency or isolated model compute.",
+  "api_input_length": "No client truncation or common token cap; provider tokenizer/truncation/precision/hardware are not independently observed.",
+  "validation": "52/300 counts, five buckets of60, unique IDs/queries, nonempty group aliases, target sections and answer points present; 500 comparisons against original metric functions; cutoff and exact-cosine checks; cached vectors recomputed for all models.",
+  "sources": [
+    "https://huggingface.co/BAAI/bge-m3",
+    "https://huggingface.co/BAAI/bge-small-zh-v1.5",
+    "https://huggingface.co/BAAI/bge-large-zh-v1.5",
+    "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B",
+    "https://huggingface.co/Qwen/Qwen3-Embedding-4B"
+  ]
+}

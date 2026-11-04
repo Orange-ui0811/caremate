@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-11-03",
+  "entries": [
+    {
+      "experiment": "rag",
+      "report": "rag/README.md",
+      "results": "rag/results.json",
+      "published_results_sha256": "7100fbbd69c85825e3c0ff224d1fd5833bdef50958897499df4d1213c5a7039d",
+      "original_artifact_sha256": "a4cf3f5e613bb6925d75f401892fbd1e4cf24ff37747fe67582e827cc0fe44b4",
+      "experiment_date": "2026-10-11 13:43",
+      "original_run_commit_sha": null,
+      "code_reference_sha": "5c1840b",
+      "code_reference_scope": "public application navigation only; not asserted as original experiment runtime"
+    },
+    {
+      "experiment": "embedding",
+      "report": "embedding/README.md",
+      "results": "embedding/results.json",
+      "published_results_sha256": "e8de52522f655888222ff5d2bf73ad56ce2f8153cf7c201cc4543e0040613155",
+      "original_artifact_sha256": "9f3c99d81f6e48c0fa8d831f25ed44b54b35926ea5cda171a87aed4a54f5b4bb",
+      "experiment_date": "2026-10-22",
+      "original_run_commit_sha": null,
+      "code_reference_sha": "5c1840b",
+      "code_reference_scope": "public application navigation only; not asserted as original experiment runtime"
+    },
+    {
+      "experiment": "context",
+      "report": "context/README.md",
+      "results": "context/results.json",
+      "published_results_sha256": "ecd3189da21a681b1dc0bfbdb48cc6223a93b0111a04f1639c6e214cbd7b8122",
+      "original_artifact_sha256": "eea03ea875c0901f84ffb70d9bef37b017f149c2a9fc6ea8cc0ce18fa0ab343f",
+      "experiment_date": "2026-10-28",
+      "original_run_commit_sha": null,
+      "code_reference_sha": "5c1840b",
+      "code_reference_scope": "public application navigation only; not asserted as original experiment runtime"
+    }
+  ]
+}

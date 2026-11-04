@@ -1,0 +1,302 @@
+{
+  "experiment": "five-embedding-models",
+  "experiment_date": "2026-10-22",
+  "source_artifact_sha256": "9f3c99d81f6e48c0fa8d831f25ed44b54b35926ea5cda171a87aed4a54f5b4bb",
+  "input_sha256": "8edae5f0b73c6be5fd9d6772a700632ab46308716fa79e0e8576771712661458",
+  "knowledge_chunks": 52,
+  "questions": 300,
+  "answerable": 240,
+  "new_model_calls_for_publication": 0,
+  "models": [
+    {
+      "key": "m3",
+      "model": "BAAI/bge-m3",
+      "dimension": 1024,
+      "status": "completed",
+      "metrics": {
+        "overall": {
+          "recall_at_5": 0.9895833333333334,
+          "recall_at_10": 0.99375,
+          "mrr_at_10": 0.844369212962963,
+          "all_groups_at_5": 0.9791666666666666,
+          "evidence_coverage_at_10": 0.9979166666666667,
+          "n": 240
+        },
+        "A_policy": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9416666666666667,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "B_model": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.8916666666666667,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "C_colloquial": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.8819444444444444,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "E_multi": {
+          "recall_at_5": 0.9583333333333334,
+          "recall_at_10": 0.975,
+          "mrr_at_10": 0.662199074074074,
+          "all_groups_at_5": 0.9166666666666666,
+          "evidence_coverage_at_10": 0.9916666666666667,
+          "n": 60
+        }
+      },
+      "timing": {
+        "batch_size": 8,
+        "document_encoding_seconds": 3.84118110000054,
+        "query_encoding_seconds": 17.174527100000887,
+        "encoding_seconds": 21.015708200001427,
+        "batch_p50_seconds": 0.42579529999966326,
+        "batch_p95_seconds": 0.6563792199995075,
+        "latency_scope": "network + provider queue + inference + any retries; one sequential pass, no warmup; not isolated model compute or single-query latency"
+      }
+    },
+    {
+      "key": "small",
+      "model": "BAAI/bge-small-zh-v1.5",
+      "dimension": 512,
+      "status": "completed",
+      "metrics": {
+        "overall": {
+          "recall_at_5": 0.920138888888889,
+          "recall_at_10": 0.9645833333333333,
+          "mrr_at_10": 0.7391344246031745,
+          "all_groups_at_5": 0.8916666666666667,
+          "evidence_coverage_at_10": 0.96875,
+          "n": 240
+        },
+        "A_policy": {
+          "recall_at_5": 0.9833333333333333,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.8875,
+          "all_groups_at_5": 0.9833333333333333,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "B_model": {
+          "recall_at_5": 0.8333333333333334,
+          "recall_at_10": 0.8833333333333333,
+          "mrr_at_10": 0.6588888888888889,
+          "all_groups_at_5": 0.8333333333333334,
+          "evidence_coverage_at_10": 0.9,
+          "n": 60
+        },
+        "C_colloquial": {
+          "recall_at_5": 0.9833333333333333,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.8066666666666668,
+          "all_groups_at_5": 0.9833333333333333,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "E_multi": {
+          "recall_at_5": 0.8805555555555554,
+          "recall_at_10": 0.975,
+          "mrr_at_10": 0.6034821428571427,
+          "all_groups_at_5": 0.7666666666666667,
+          "evidence_coverage_at_10": 0.975,
+          "n": 60
+        }
+      },
+      "timing": {
+        "batch_size": 8,
+        "document_encoding_seconds": 2.0155689000002894,
+        "query_encoding_seconds": 10.354286999999204,
+        "encoding_seconds": 12.369855899999493,
+        "batch_p50_seconds": 0.2295723999995971,
+        "batch_p95_seconds": 0.368416839999918,
+        "latency_scope": "network + provider queue + inference + any retries; one sequential pass, no warmup; not isolated model compute or single-query latency"
+      }
+    },
+    {
+      "key": "large",
+      "model": "BAAI/bge-large-zh-v1.5",
+      "dimension": 1024,
+      "status": "completed",
+      "metrics": {
+        "overall": {
+          "recall_at_5": 0.9791666666666666,
+          "recall_at_10": 0.9958333333333333,
+          "mrr_at_10": 0.8510896164021164,
+          "all_groups_at_5": 0.9666666666666667,
+          "evidence_coverage_at_10": 1.0,
+          "n": 240
+        },
+        "A_policy": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9222222222222223,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "B_model": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9483333333333334,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "C_colloquial": {
+          "recall_at_5": 0.9666666666666667,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.8676587301587302,
+          "all_groups_at_5": 0.9666666666666667,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "E_multi": {
+          "recall_at_5": 0.95,
+          "recall_at_10": 0.9833333333333333,
+          "mrr_at_10": 0.66614417989418,
+          "all_groups_at_5": 0.9,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        }
+      },
+      "timing": {
+        "batch_size": 8,
+        "document_encoding_seconds": 2.3531131000008827,
+        "query_encoding_seconds": 13.064733799999885,
+        "encoding_seconds": 15.417846900000768,
+        "batch_p50_seconds": 0.28381139999964944,
+        "batch_p95_seconds": 0.5163785800001276,
+        "latency_scope": "network + provider queue + inference + any retries; one sequential pass, no warmup; not isolated model compute or single-query latency"
+      }
+    },
+    {
+      "key": "qwen06",
+      "model": "Qwen/Qwen3-Embedding-0.6B",
+      "dimension": 1024,
+      "status": "completed",
+      "metrics": {
+        "overall": {
+          "recall_at_5": 0.9798611111111112,
+          "recall_at_10": 0.9958333333333333,
+          "mrr_at_10": 0.8624479166666668,
+          "all_groups_at_5": 0.9583333333333334,
+          "evidence_coverage_at_10": 0.9986111111111111,
+          "n": 240
+        },
+        "A_policy": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9722222222222221,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "B_model": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9208333333333333,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "C_colloquial": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.8944444444444444,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "E_multi": {
+          "recall_at_5": 0.9194444444444444,
+          "recall_at_10": 0.9833333333333333,
+          "mrr_at_10": 0.6622916666666666,
+          "all_groups_at_5": 0.8333333333333334,
+          "evidence_coverage_at_10": 0.9944444444444444,
+          "n": 60
+        }
+      },
+      "timing": {
+        "batch_size": 8,
+        "document_encoding_seconds": 2.795852999998715,
+        "query_encoding_seconds": 14.379623700004231,
+        "encoding_seconds": 17.175476700002946,
+        "batch_p50_seconds": 0.37310059999981604,
+        "batch_p95_seconds": 0.5204186799997842,
+        "latency_scope": "network + provider queue + inference + any retries; one sequential pass, no warmup; not isolated model compute or single-query latency"
+      }
+    },
+    {
+      "key": "qwen4",
+      "model": "Qwen/Qwen3-Embedding-4B",
+      "dimension": 2560,
+      "status": "completed",
+      "metrics": {
+        "overall": {
+          "recall_at_5": 0.976388888888889,
+          "recall_at_10": 0.9875,
+          "mrr_at_10": 0.8467551256613757,
+          "all_groups_at_5": 0.95,
+          "evidence_coverage_at_10": 0.9965277777777778,
+          "n": 240
+        },
+        "A_policy": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.898611111111111,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "B_model": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9388888888888888,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "C_colloquial": {
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "mrr_at_10": 0.9094444444444444,
+          "all_groups_at_5": 1.0,
+          "evidence_coverage_at_10": 1.0,
+          "n": 60
+        },
+        "E_multi": {
+          "recall_at_5": 0.9055555555555554,
+          "recall_at_10": 0.95,
+          "mrr_at_10": 0.6400760582010582,
+          "all_groups_at_5": 0.8,
+          "evidence_coverage_at_10": 0.986111111111111,
+          "n": 60
+        }
+      },
+      "timing": {
+        "batch_size": 8,
+        "document_encoding_seconds": 4.040778400000818,
+        "query_encoding_seconds": 19.104020200002196,
+        "encoding_seconds": 23.144798600003014,
+        "batch_p50_seconds": 0.4698562999992646,
+        "batch_p95_seconds": 0.7530894600004102,
+        "latency_scope": "network + provider queue + inference + any retries; one sequential pass, no warmup; not isolated model compute or single-query latency"
+      }
+    }
+  ],
+  "limitations": [
+    "Dense-only exact cosine; no BM25, reranking, generation or database writes.",
+    "API timings include network and queueing; one sequential pass without warmup.",
+    "Internal question set; no independent external generalization claim."
+  ]
+}
