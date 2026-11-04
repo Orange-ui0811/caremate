@@ -63,6 +63,13 @@ def test_done_and_unrelated_tasks_are_not_reactivated():
     assert tasks['c']['status']=='WAITING_USER' and not tasks['c'].get('order_id')
 
 
+def test_rejected_product_binding_waits_instead_of_retrieving_without_object():
+    tasks={'k':{'kind':'knowledge','status':'PENDING','knowledge_scope':'product','subject_ref':'',
+                'binding_validation':'unsupported_candidate'}}
+    refresh(tasks,'alice')
+    assert tasks['k']['status']=='WAITING_USER' and tasks['k']['step']=='select_order'
+
+
 async def test_enabling_v2_does_not_replan_existing_v1_interrupt(wired,tmp_path,monkeypatch):
     from tests.graph.test_subflow_tasks import planner
     monkeypatch.setattr(settings,'multi_intent_context_v2_enabled',False)

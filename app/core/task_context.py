@@ -71,7 +71,33 @@ def normalize(raw, items, context):
         if alignment:t['source_alignment']=alignment
         if binding.prohibited(raw,t):continue
         span=t.get('reference_span') or ''
-        if span and span not in raw:raise ValueError('对象引用不是本轮原文')
+        if span and span not in raw and t['kind'] in {'order','logistics'}:
+            literal=t.get('order_reference','')
+            cs,indices=binding.source_clauses(raw,t['source'])
+            if (literal and literal in raw and len(binding.numbers(literal))==1 and any(
+                    literal in cs[i].text and binding.numbers(cs[i].text)==binding.numbers(literal)
+                    and not binding.inactive(t['kind'],cs[i].text) for i in indices)):
+                # A second, verbatim field independently proves the same local
+                # order. Retain the rejected proposal and use that actual span.
+                t['reference_alignment']={'method':'task_local_literal_reference','model_span':span}
+                span=t['reference_span']=literal
+        if span and span not in raw:
+            # Models sometimes use a literal ellipsis between copied endpoints.
+            # Recover only one continuous, single-clause, single-order span;
+            # never accept arbitrary paraphrases or a link across two orders.
+            parts=re.split(r'\.{3}|…+',span)
+            matches=[]
+            if len(parts)>1 and all(parts):
+                pattern='.*?'.join(re.escape(p) for p in parts)
+                for clause in binding.clauses(raw):
+                    for match in re.finditer(pattern,clause.text):
+                        text=match.group()
+                        if (len(binding.numbers(text))==1 and not order_context.NEW_OBJECT.search(text)
+                                and not binding.inactive(t['kind'],clause.text)):
+                            matches.append(text)
+            if len(matches)!=1:raise ValueError('对象引用不是本轮原文')
+            t['reference_alignment']={'method':'literal_ellipsis_alignment','model_span':span}
+            span=t['reference_span']=matches[0]
         proposal={k:t.get(k) for k in ('order_id','subject_ref','candidate_ref','binding_status','reference_span')}
         local=binding.resolve(raw,t) if t['kind'] in binding.ORDER_KINDS else None
         ids=local['order_ids'] if local and local['status']=='resolved' else []
@@ -79,7 +105,7 @@ def normalize(raw, items, context):
         # action keyword, but a write still needs its own positive local binding.
         if not ids and t['kind'] in {'order','logistics'}:
             numbers=binding.numbers(t['source'])
-            if len(numbers)==1 and not re.search('不是|不要|不查|改查',t['source']):ids=numbers
+            if len(numbers)==1 and not re.search('不是|不要|不查',t['source']):ids=numbers
         candidate=candidates.get(t.get('candidate_ref'))
         error=None
         if candidate and not span:error='missing_reference_span'

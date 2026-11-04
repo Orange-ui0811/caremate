@@ -61,10 +61,12 @@ async def plan(state):
                          and not next(iter(tasks.values())).get('subject_ref')):
             return {'task_plan':{},'plan_id':'','task_events':[],'task_planning_error':False}
         return {'task_plan':tasks,'task_events':[], 'task_planning_error':False,'planning_context':planning_context}
-    except Exception:
+    except Exception as exc:
         text='暂时无法可靠拆解这条消息中的全部事项，请分别说明需要办理的业务。本轮尚未发起其他业务操作。'
         ev=await workflow.event(state['conversation_id'],state['user_id'],state['plan_id']+':planning-error',text)
-        return {'task_events':[ev],'answer':text,'task_planning_error':True}
+        return {'task_events':[ev],'answer':text,'task_planning_error':True,
+                'planning_error':type(exc).__name__+':'+str(exc),
+                'planning_proposals':getattr(exc,'proposals',[])}
 
 
 def plan_route(state):

@@ -65,6 +65,41 @@ def test_plural_unnamed_order_cannot_be_guessed_from_recency():
     assert t['order_id'] is None and t['subject_ref']=='s1'
 
 
+def test_literal_ellipsis_reference_recovers_single_order_original_span():
+    raw='不是1001，改查订单2002物流和商品信息'
+    c=context();c['candidates'].append({'ref':'order:2002','order_id':'2002','source':{'kind':'current_message'}})
+    t=item('order','和商品信息');t.update(candidate_ref='order:2002',reference_span='订单2002...商品信息')
+    result=ctx.normalize(raw,[t],c)[0]
+    assert result['order_id']=='2002' and result['reference_span']=='订单2002物流和商品信息'
+    assert result['reference_span'] in raw and result['reference_alignment']['model_span']==t['reference_span']
+
+
+def test_valid_local_order_reference_repairs_coordinated_read_projection():
+    raw='不是1001，改查订单2002物流和商品信息'
+    c=context();c['candidates'].append({'ref':'order:2002','order_id':'2002','source':{'kind':'current_message'}})
+    t=item('order','改查订单2002物流和商品信息')
+    t.update(candidate_ref='order:2002',reference_span='订单2002商品信息',order_reference='订单2002')
+    result=ctx.normalize(raw,[t],c)[0]
+    assert result['order_id']=='2002' and result['reference_span']=='订单2002'
+    assert result['reference_alignment']['model_span']=='订单2002商品信息'
+
+
+def test_coordinated_correction_also_overrides_stale_candidate():
+    raw='不是1001，改查订单2002物流和商品信息'
+    t=item('order','改查订单2002物流和商品信息');t['reference_span']='订单2002'
+    result=ctx.normalize(raw,[t],context())[0]
+    assert result['order_id']=='2002' and result['binding_validation']=='current_order_conflict'
+
+
+@pytest.mark.parametrize('raw,span',[
+    ('查订单1001物流，另查订单2002商品信息','订单1001...商品信息'),
+    ('查订单1001和订单2002商品信息','订单1001...商品信息'),
+    ('查订单1001商品信息','订单1001的商品信息')])
+def test_paraphrase_or_cross_order_ellipsis_is_rejected(raw,span):
+    t=item('order',raw);t['reference_span']=span
+    with pytest.raises(ValueError):ctx.normalize(raw,[t],context())
+
+
 def test_builder_uses_history_but_assistant_cannot_create_order_candidate(monkeypatch):
     state={'user_id':'u','conversation_id':7,'current_message_id':5,'task_origin':'刚刚那单送到哪了',
            'messages':[AIMessage('订单1001查询成功',id='db-1'),HumanMessage('收到',id='db-2'),

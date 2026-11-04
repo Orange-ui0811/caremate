@@ -60,6 +60,15 @@ class Tee(httpx.AsyncByteStream):
 
 
 def instrument():
+    from app.core import task_context
+    normalize=task_context.normalize
+    def normalized(raw,items,context):
+        ACTIVE['raw_proposals']=items
+        try:return normalize(raw,items,context)
+        except Exception as exc:
+            ACTIVE['validation_error']={'type':type(exc).__name__,'message':str(exc)}
+            raise
+    task_context.normalize=normalized
     original=httpx.AsyncClient.send
     async def send(client,request,**kwargs):
         host=urlsplit(str(request.url)).hostname
@@ -120,7 +129,7 @@ async def seed(case,uid):
         for i in range(24):
             await repository.append_message(cid,'user',f'问一下宠物护理术语第{i}项的含义，与购买订单无关。')
             mid=await repository.append_message(cid,'assistant','术语介绍仅供参考，不代表办理了业务。'*18)
-        await repository.update_conversation_summary(cid,'较早讨论并核验订单1001；其余均是通用术语咨询。',mid,0)
+        await repository.update_conversation_summary(cid,'较早讨论并核验订单1001；其余均是通用术语咨询。',mid,expected_upto_msg_id=0)
     return cid
 
 

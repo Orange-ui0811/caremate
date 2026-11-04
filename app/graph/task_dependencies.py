@@ -7,8 +7,7 @@ PRIORITY = {'order':0,'logistics':1,'refund':2,'knowledge':4}
 
 
 def requires_order(t):
-    return t['kind'] in ORDER_KINDS or (t['kind']=='knowledge' and t.get('knowledge_scope')=='product'
-                                       and bool(t.get('subject_ref')))
+    return t['kind'] in ORDER_KINDS or (t['kind']=='knowledge' and t.get('knowledge_scope')=='product')
 
 
 def refresh(tasks, uid):
