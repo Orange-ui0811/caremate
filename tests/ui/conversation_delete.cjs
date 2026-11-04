@@ -15,6 +15,8 @@ fs.mkdirSync(out, { recursive: true });
     let fail = false, deletes = 0, messageReads = 0;
     await page.route('**/*', async route => {
       const req = route.request(), url = new URL(req.url());
+      if (url.pathname.endsWith('/workflow-mode')) return route.fulfill({ json: { multi_intent_enabled: false } });
+      if (url.pathname.endsWith('/task-events')) return route.fulfill({ json: { items: [], interrupt: null } });
       if (url.pathname === '/api/conversations') return route.fulfill({ json: { items } });
       if (req.method() === 'DELETE') {
         assert.equal(url.searchParams.get('user_id'), 'ui-delete-test');

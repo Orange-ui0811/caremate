@@ -143,6 +143,7 @@ def _graph_input(user_id: str, message: str, cid: int, msg_id: int,
             "current_message_id": msg_id,
             "task_plan": {}, "task_events": [], "task_decisions": {}, "plan_id": "", 'task_planning_error':False,
             'subflow_results': {},
+            'subflow_presented': {}, 'subflow_reply_id':'', 'subflow_presentation':False,
             "trace": None}  # merge 通道:None=重置哨兵(见 merge_dict),清上一轮 trace 残留
 
 
@@ -238,6 +239,15 @@ async def run_turn(user_id, message, conversation_id, *, multi_intent_enabled=No
         return await _run_turn(user_id, message, conversation_id)
 
 
+def task_reply_text(final, saved, *, resumed=False):
+    if final.get('subflow_presentation'):
+        ids={final.get('subflow_reply_id')}
+        if not resumed:
+            ids.update(t['task_id'] for t in final.get('task_plan',{}).values() if t['kind']=='safety')
+        return '\n\n'.join(e['text'] for e in saved if e['event_id'] in ids)
+    return '\n\n'.join(e['text'] for e in saved if e['event_id'].startswith(final['plan_id']+':'))
+
+
 async def _run_turn(user_id, message, conversation_id) -> dict:
     """非流式:落 user 消息 → ainvoke → 返回终态(供 /api/agent、eval)。遇 interrupt 带 orders。"""
     cid, summary, upto = await _ensure_conversation(user_id, conversation_id)
@@ -251,7 +261,7 @@ async def _run_turn(user_id, message, conversation_id) -> dict:
     if final.get("task_plan"):
         from app.db.workflow import events
         saved = await events(cid, user_id)
-        final["answer"] = "\n\n".join(e["text"] for e in saved if e["event_id"].startswith(final["plan_id"] + ":"))
+        final["answer"] = task_reply_text(final,saved)
     await summarizer.maybe_schedule_summary(cid)   # ch07 轮后触发检查(后台跑,不阻塞返回)
     return {"conversation_id": cid, "state": final, "interrupt": _interrupt_payload(final)}
 
@@ -270,7 +280,7 @@ async def _resume_turn(conversation_id: int, resume_value, *, user_id: str, inte
     if final.get("task_plan"):
         from app.db.workflow import events
         saved = await events(conversation_id, user_id)
-        final["answer"] = "\n\n".join(e["text"] for e in saved if e["event_id"].startswith(final["plan_id"] + ":"))
+        final["answer"] = task_reply_text(final,saved,resumed=True)
     await summarizer.maybe_schedule_summary(conversation_id)
     return {"conversation_id": conversation_id, "state": final,
             "interrupt": _interrupt_payload(final)}
@@ -318,7 +328,8 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
                 if not isinstance(upd, dict):
                     continue
                 for event in upd.get("task_events", []):
-                    yield {"type": "task_event", "conversation_id": cid, **event}
+                    if not event.get('internal'):
+                        yield {"type": "task_event", "conversation_id": cid, **event}
                 if node in RETRIEVAL_NODES:
                     yield {"type": "activity", **retrieval_activity(node)}
                 if node in DETERMINISTIC_ANSWER_NODES and upd.get("answer"):

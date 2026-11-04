@@ -3,6 +3,7 @@ import hashlib
 import json
 import uuid
 from contextvars import ContextVar
+from contextlib import contextmanager
 
 from sqlalchemy import JSON, BigInteger, String, select, inspect, text, Enum
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,6 +12,16 @@ from app.db import base
 from app.db.models import Conversation, Message, Ticket
 
 operation_context = ContextVar("operation_context", default=None)
+_internal_events = ContextVar('internal_workflow_events', default=False)
+
+
+@contextmanager
+def internal_events():
+    token = _internal_events.set(True)
+    try:
+        yield
+    finally:
+        _internal_events.reset(token)
 
 
 class WorkflowRecord(base.Base):
@@ -70,7 +81,10 @@ async def _owned(session, cid, uid):
     return conv
 
 
-async def event(cid, uid, key, text, *, task_id="", actions=None):
+async def event(cid, uid, key, text, *, task_id="", actions=None, citations=None):
+    internal = _internal_events.get()
+    if internal:
+        key = 'internal:' + key
     async with base.async_session() as session:
         await _owned(session, cid, uid)
         old = await session.get(WorkflowRecord, key)
@@ -78,11 +92,18 @@ async def event(cid, uid, key, text, *, task_id="", actions=None):
             if old.conversation_id != cid:
                 raise ValueError("事件归属不匹配")
             return old.payload
+        if internal:
+            payload={'event_id':key,'text':text,'task_id':task_id,'actions':actions or [],'internal':True}
+            session.add(WorkflowRecord(key=key,conversation_id=cid,payload=payload))
+            await session.commit()
+            return payload
         msg = Message(conversation_id=cid, role="assistant", content=text)
         session.add(msg)
         await session.flush()
         payload = {"event_id": key, "message_id": msg.id, "sequence": msg.id,
                    "text": text, "task_id": task_id, "actions": actions or [], "acked": False}
+        if citations:
+            payload['citations'] = citations
         session.add(WorkflowRecord(key=key, conversation_id=cid, payload=payload))
         await session.commit()
         return payload

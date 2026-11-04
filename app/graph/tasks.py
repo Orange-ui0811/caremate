@@ -306,6 +306,8 @@ async def knowledge(state):
             '用户反映故障时按质量问题申请审核的方向解释，不能套用非质量问题限制直接拒绝；是否属实、是否符合售后条件仍需核实。'
             '保修期、免费维修或换货权益不等于退货期限或退货批准，不能以保修政策推导必然可退货。'
             '退货咨询不代表申请退款，不恢复已取消的提交，不承诺审核通过。') if context else ''
+        if state.get('subflow_presentation'):
+            context_note+='\n这是多事项中的一项：只回答这一项的事实、政策与必要限制，不添加邀约、追问其他诉求或结尾客套；其他业务由调度器办理。'
         stage='generation'
         response=await get_chat_model().ainvoke([
             {'role':'system','content':'你是喵喵优选客服，直接对用户说话，用“您”称呼，简短回答当前问题。'

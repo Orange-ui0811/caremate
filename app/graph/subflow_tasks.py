@@ -8,6 +8,9 @@ from langgraph.types import interrupt
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core import order_context
+from app.core.task_reply import compose
+import hashlib
+import json
 from app.db import workflow
 from app.graph import nodes, tasks as legacy
 from app.graph.read_subflows import execute_read
@@ -26,12 +29,16 @@ async def schedule(state):
                              state['current_message_id'], state['task_plan'])
     pending = [k for k,t in state['task_plan'].items() if t['status']=='PENDING']
     return {'active_task':min(pending,key=lambda k:PRIORITY.get(state['task_plan'][k]['kind'],9)) if pending else '',
-            'task_events':[]}
+            'task_events':[], 'subflow_presentation':True}
 
 
 def route(state):
     if state.get('active_task'):
         return 'prepare'
+    return 'present'
+
+
+def wait_route(state):
     waits = [t for t in state['task_plan'].values() if t['status']=='WAITING_USER']
     if any(t.get('step')=='select_order' for t in waits):
         return 'select'
@@ -60,17 +67,14 @@ async def select_order(state):
     orders=business.list_user_orders(uid)
     if not orders:
         task.update(status='CANCELLED',step='no_orders')
-        ev=await workflow.event(state['conversation_id'],uid,task['task_id']+':selection-result',
-            '当前没有可选订单，本项未办理；其他事项会继续处理。',task_id=task['task_id'])
-        return {'task_plan':items,'task_events':[ev]}
+        return {'task_plan':items,'task_events':[]}
     value=interrupt({'type':'select_order','orders':orders,'can_cancel':True,
         'plan_id':state['plan_id'],'task_id':task['task_id'],'task_kind':task['kind'],
-        'selection_prompt':f"请选择这项请求对应的订单：{task.get('query','')}"})
+        'selection_prompt':{'refund':'请选择要申请退款审核的订单：','order':'请选择要查询的订单：',
+                            'logistics':'请选择要查询物流的订单：'}[task['kind']]})
     if value=={'cancelled':True}:
         task.update(status='CANCELLED',step='cancelled')
-        ev=await workflow.event(state['conversation_id'],uid,task['task_id']+':selection-result',
-            '已取消本项选单，其他事项会继续处理。',task_id=task['task_id'])
-        return {'task_plan':items,'task_events':[ev]}
+        return {'task_plan':items,'task_events':[]}
     if not isinstance(value,str) or not business.owns_order(uid,value):
         raise ValueError('无效订单选择，未执行业务')
     task.update(order_id=value,binding={'status':'resolved','method':'user_selection','order_ids':[value]},
@@ -89,9 +93,18 @@ async def read(state):
     out=await execute_read({**state,'tasks':[task],'results':[],'active':0})
     items=copied(state); items[key]=out['tasks'][0]
     result=out['results'][0]
-    ev=await workflow.event(state['conversation_id'],state['user_id'],task['task_id']+':result',
-        result.get('answer') or '本次查询暂时无法完成。',task_id=task['task_id'])
-    return {'task_plan':items,'subflow_results':{**state.get('subflow_results',{}),key:result},'task_events':[ev]}
+    return {'task_plan':items,'subflow_results':{**state.get('subflow_results',{}),key:result},'task_events':[]}
+
+
+async def quiet(fn, state):
+    with workflow.internal_events():
+        out=await fn(state)
+    key=state['active_task']
+    texts=[e['text'] for e in out.get('task_events',[])]
+    out['task_events']=[]
+    if texts and state['task_plan'][key]['kind']=='knowledge':
+        out['subflow_results']={**state.get('subflow_results',{}),key:{'answer':'\n'.join(texts)}}
+    return out
 
 
 async def refund(state):
@@ -100,12 +113,20 @@ async def refund(state):
     verified=await nodes.fetch_order({**state,'order_id':task['order_id']})
     scoped={**state,**verified,'task_order':task['order_id'],'task_order_cancelled':False,
             'task_origin':task['source']}
-    return await legacy.refund(scoped)
+    return await quiet(legacy.refund,scoped)
 
 
 async def complaint(state):
     task=state['task_plan'][state['active_task']]
-    return await legacy.complaint({**state,'task_origin':task['source']})
+    return await quiet(legacy.complaint,{**state,'task_origin':task['source']})
+
+
+async def knowledge(state):
+    return await quiet(legacy.knowledge,{**state,'subflow_presentation':True})
+
+
+async def unsupported(state):
+    return await quiet(legacy.unsupported,state)
 
 
 async def wait_actions(state):
@@ -121,28 +142,38 @@ async def wait_actions(state):
 
 async def commit(state):
     try:
-        return await legacy.commit_action(state)
+        with workflow.internal_events():
+            return await _commit(state)
     except (SQLAlchemyError, ConnectionError, TimeoutError, OSError):
-        # The SQL commit may have succeeded before a response/event failure.
-        # Keep the SAME operation and immutable preview, return to a new card.
-        # workflow.submit retrieves the original receipt on the next attempt.
-        decision=state['task_decisions']
-        task=next(t for t in state['task_plan'].values() if t.get('operation_id')==decision['operation_id'])
-        events=[]
-        try:
-            events=[await workflow.event(state['conversation_id'],state['user_id'],task['operation_id']+':retry',
-                '提交结果暂时无法确认，请重试原操作；如已提交成功，将返回原工单，不会重复创建。',task_id=task['task_id'])]
-        except (SQLAlchemyError, ConnectionError, TimeoutError, OSError):
-            pass  # SQLite still retains the waiting task even if MySQL is down.
-        return {'task_decisions':{},'task_events':events}
+        items=copied(state)
+        task=next(t for t in items.values() if t.get('operation_id')==state['task_decisions']['operation_id'])
+        task['retry_submission']=True
+        return {'task_plan':items,'task_decisions':{},'task_events':[]}
+
+
+async def _commit(state):
+    result=await legacy.commit_action(state)
+    result['task_events']=[]
+    return result
+
+
+async def present(state):
+    text,citations,seen=compose(state)
+    if not text:return {'subflow_presented':seen,'subflow_reply_id':'','task_events':[]}
+    digest=hashlib.sha256(json.dumps(seen,sort_keys=True).encode()).hexdigest()[:20]
+    key=state['plan_id']+':reply:'+digest
+    ev=await workflow.event(state['conversation_id'],state['user_id'],key,text,citations=citations)
+    return {'subflow_presented':seen,'subflow_reply_id':key,'task_events':[ev]}
 
 
 def install(b):
     for name,fn in {'sf_schedule':schedule,'sf_prepare':prepare,'sf_select':select_order,
         'sf_read':read,'sf_refund':refund,'sf_complaint':complaint,'sf_wait':wait_actions,
-        'sf_commit':commit,'sf_finish':legacy.finish}.items():b.add_node(name,fn)
-    b.add_conditional_edges('sf_schedule',route,{'prepare':'sf_prepare','select':'sf_select','wait':'sf_wait','finish':'sf_finish'})
+        'sf_commit':commit,'sf_present':present,'sf_knowledge':knowledge,'sf_unsupported':unsupported,
+        'sf_finish':legacy.finish}.items():b.add_node(name,fn)
+    b.add_conditional_edges('sf_schedule',route,{'prepare':'sf_prepare','present':'sf_present'})
+    b.add_conditional_edges('sf_present',wait_route,{'select':'sf_select','wait':'sf_wait','finish':'sf_finish'})
     b.add_conditional_edges('sf_prepare',dispatch,{'schedule':'sf_schedule','read':'sf_read','refund':'sf_refund',
-        'complaint':'sf_complaint','knowledge':'task_knowledge','other':'task_unsupported'})
-    for name in ['sf_select','sf_read','sf_refund','sf_complaint','sf_commit']:b.add_edge(name,'sf_schedule')
+        'complaint':'sf_complaint','knowledge':'sf_knowledge','other':'sf_unsupported'})
+    for name in ['sf_select','sf_read','sf_refund','sf_complaint','sf_commit','sf_knowledge','sf_unsupported']:b.add_edge(name,'sf_schedule')
     b.add_edge('sf_wait','sf_commit'); b.add_edge('sf_finish',END)

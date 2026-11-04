@@ -13,6 +13,8 @@ const root = path.resolve(__dirname, '../..');
     const events = [{ event: 'activity', ...activities[0] }, { event: 'tool', name: 'query_product' }, { delta: '已找到退换货政策。' }, { event: 'done', conversation_id: 77 }];
     await page.route('**/*', async route => {
       const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/workflow-mode')) return route.fulfill({ json: { multi_intent_enabled: false } });
+      if (url.pathname.endsWith('/task-events')) return route.fulfill({ json: { items: [], interrupt: null } });
       if (url.pathname === '/api/chat') return route.fulfill({ contentType: 'text/event-stream', body: events.map(x => 'data: ' + JSON.stringify(x) + '\n\n').join('') + 'data: [DONE]\n\n' });
       if (url.pathname === '/api/conversations') return route.fulfill({ json: { items: [{ id: 77, preview: '退货换货政策是怎么样的' }] } });
       if (url.pathname.endsWith('/messages')) return route.fulfill({ json: { items: [

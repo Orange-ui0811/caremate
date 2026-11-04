@@ -762,9 +762,6 @@
         await streamInto(bubble, () => fetch("/api/actions/resume", {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({user_id: getUserId(), ...body})}));
-        const holder = card.parentElement;
-        if (card.classList.contains('bubble')) holder.remove();
-        else { card.remove(); if (!holder.childNodes.length) holder.parentElement.remove(); }
       } catch (e) {
         bubble.textContent = "续办未完成，请重新打开会话核实最新状态。";
         buttons.forEach(b => b.disabled = false);
@@ -773,30 +770,65 @@
 
     function renderTaskActions(bubble, data) {
       const card = document.createElement("div");
-      card.className = "ticket-confirm";
+      card.className = "workflow-controls";
+      card.dataset.interruptId = data.interrupt_id;
+      const intro = document.createElement('p');
+      intro.className = 'workflow-note';
+      intro.textContent = '请核对下方工单，每张工单需分别确认。';
+      card.appendChild(intro);
       for (const action of data.actions || []) {
+        const item = document.createElement('section');
+        item.className = 'ticket-confirm task-preview';
+        const title = document.createElement('div');
+        title.className = 'tc-title';
+        title.textContent = action.preview.ticket_type === '退款' ? '退款审核申请' : action.preview.ticket_type + '工单';
+        item.appendChild(title);
         const line = document.createElement("p");
-        line.textContent = action.preview.ticket_type + "工单：" + action.preview.description;
-        card.appendChild(line);
+        line.textContent = action.preview.description.replace(/^退款审核申请\s*订单号=(\d+)\s*用户原述[:：]\s*/, '订单 $1：');
+        item.appendChild(line);
+        const buttons = document.createElement('div');buttons.className='tc-btns';
         for (const confirmed of [true, false]) {
           const button = document.createElement("button");
           button.className = "btn";
-          button.textContent = confirmed ? "确认提交此工单" : "取消此工单";
+          button.textContent = (confirmed ? '确认提交' : '取消') + action.preview.ticket_type + '工单';
           button.onclick = () => resumeTaskCard(card, {conversation_id: data.conversation_id,
             interrupt_id: data.interrupt_id, operation_id: action.operation_id, confirmed});
-          card.appendChild(button);
+          buttons.appendChild(button);
         }
+        item.appendChild(buttons);card.appendChild(item);
       }
       bubble.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    function renderTaskEvent(data) {
+    function retireWorkflowControls() {
+      for (const card of messagesEl.querySelectorAll('.workflow-controls')) {
+        const holder=card.parentElement;card.remove();
+        if (holder && !holder.textContent.trim() && !holder.children.length) holder.parentElement.remove();
+      }
+    }
+
+    function renderWorkflowInterrupt(bubble, data) {
+      retireWorkflowControls();
+      if (data.kind==='task_actions') { renderTaskActions(bubble,data);return; }
+      const controls=document.createElement('div');controls.className='workflow-controls';
+      controls.dataset.interruptId=data.interrupt_id;bubble.appendChild(controls);
+      if (data.kind==='confirm_ticket') renderTicketConfirm(controls,data.preview || {},data);
+      else {renderOrderCards(controls,data.orders || [],order=>pickThenResume(order,data),data.selection_prompt);addCancelOrder(controls,data);}
+    }
+
+    function renderTaskEvent(data, beforeBubble) {
+      if (data.internal) return null;
       setConversationId(data.conversation_id || getConversationId());
       let row = messagesEl.querySelector('[data-message-id="' + Number(data.message_id) + '"]');
       if (!row) {
         row = addRow("bot");
         row.dataset.messageId = data.message_id;
         row.innerHTML = renderMarkdown(data.text);
+        if (beforeBubble) messagesEl.insertBefore(row.parentElement,beforeBubble.parentElement);
+      }
+      if (data.citations?.length && !row.dataset.citationsApplied) {
+        decorateCitations(row,data.citations);row.dataset.citationsApplied='true';
       }
       fetch('/api/conversations/' + getConversationId() + '/task-events/'
         + encodeURIComponent(data.event_id) + '/ack?user_id=' + encodeURIComponent(getUserId()),
@@ -808,22 +840,18 @@
       const response = await fetch('/api/conversations/' + cid + '/task-events?user_id=' + encodeURIComponent(getUserId()));
       if (!response.ok) return;
       const data = await response.json();
-      for (const event of data.items || []) renderTaskEvent({...event, conversation_id: cid});
+      let lastReply = null;
+      for (const event of data.items || []) lastReply = renderTaskEvent({...event, conversation_id: cid}) || lastReply;
       if (data.interrupt) {
-        const bubble = addRow('bot');
-        if (data.interrupt.kind === 'task_actions') renderTaskActions(bubble, data.interrupt);
-        else if (data.interrupt.kind === 'select_order') {
-          renderOrderCards(bubble, data.interrupt.orders || [], order => pickThenResume(order, data.interrupt), data.interrupt.selection_prompt);
-          addCancelOrder(bubble, data.interrupt);
-        }
-      }
+        const bubble = lastReply || addRow('bot');
+        renderWorkflowInterrupt(bubble,data.interrupt);
+      } else retireWorkflowControls();
     }
 
     function addCancelOrder(bubble, data) {
       if (!data.can_cancel) return;
       const button = document.createElement('button');
-      button.className = 'btn'; button.textContent = data.task_kind && data.task_kind !== 'refund'
-        ? '取消本项选单，继续其他事项' : '取消退款选单，继续其他事项';
+      button.className = 'btn'; button.textContent = '取消这次选单';
       button.onclick = () => resumeTaskCard(bubble, {conversation_id: data.conversation_id,
         interrupt_id: data.interrupt_id, cancelled: true});
       bubble.appendChild(button);
@@ -831,10 +859,10 @@
 
     async function streamInto(bubble, doFetch) {
       showTyping(bubble);
-      let structured = false, textStarted = false, interrupted = false, raw = "";
+      let structured = false, textStarted = false, interrupted = false, raw = "", eventBubble = null;
       let badgesEl = null, textEl = null, citations = [], actions = [];
       function ensureStructure() {
-        if (structured) return;
+          if (structured && textEl) return;
         bubble.innerHTML = "";
         badgesEl = document.createElement("div");
         badgesEl.className = "tool-badges";
@@ -848,9 +876,9 @@
       const resp = await doFetch();
       await readSSEStream(resp, {
         task_event: data => {
+          if (data.internal) return;
           if (!structured) { bubble.innerHTML = ''; structured = true; }
-          const row = renderTaskEvent(data);
-          if (row.parentElement !== bubble.parentElement) messagesEl.insertBefore(row.parentElement, bubble.parentElement);
+          eventBubble = renderTaskEvent(data,bubble) || eventBubble;
         },
         delta: (delta) => {
           ensureStructure();
@@ -875,12 +903,14 @@
           interrupted = true;
           if (!structured) { bubble.innerHTML = ""; structured = true; }
           // ch08:中断按 kind 分发——select_order 弹订单卡,confirm_ticket 弹工单预览卡
-          if (data.kind === "task_actions") renderTaskActions(bubble, data);
-          else if (data.kind === "confirm_ticket") renderTicketConfirm(bubble, data.preview || {}, data);
-          else { renderOrderCards(bubble, data.orders || [], (order) => pickThenResume(order, data), data.selection_prompt); addCancelOrder(bubble, data); }
+          renderWorkflowInterrupt(eventBubble || bubble,data);
         },
       });
-      if (interrupted) return;
+      if (interrupted) {
+        if (eventBubble && !textStarted && bubble.parentElement) bubble.parentElement.remove();
+        return;
+      }
+      retireWorkflowControls();
       if (!textStarted && structured && !textEl) { bubble.parentElement.remove(); return; }
       if (!textStarted) { ensureStructure(); textEl.innerHTML = ""; textEl.textContent = "(无回复)"; }
       if (textStarted && citations.length) decorateCitations(textEl, citations);

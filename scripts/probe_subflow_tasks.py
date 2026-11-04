@@ -24,11 +24,14 @@ from app.graph.build import build_graph
 from app.kb import milvus_client
 from app.api.chat import router as chat_router
 from app.api.actions import router as actions_router
+from app.api.conversations import router as conversations_router
 
 
 async def main():
     stamp=datetime.now().strftime('%Y%m%d_%H%M%S')
-    folder=Path('data/verification')/('p2-live-'+stamp);folder.mkdir(parents=True)
+    prefix=sys.argv[1] if len(sys.argv)>1 else 'p2-live'
+    if prefix not in {'p2-live','p3-live'}:raise ValueError('Unsupported probe prefix')
+    folder=Path('data/verification')/(prefix+'-'+stamp);folder.mkdir(parents=True)
     dbname='caremate_subflow_p2_'+stamp
     settings.multi_intent_subflows_enabled=True
     settings.chat_failover_enabled=False
@@ -58,10 +61,12 @@ async def main():
     code={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in [
         'app/graph/subflow_tasks.py','app/graph/read_subflows.py','app/graph/build.py',
         'app/graph/runtime.py','app/graph/nodes.py','app/db/workflow.py']}
+    for p in ['app/core/task_reply.py','app/graph/tasks.py','app/graph/state.py','app/static/index.html','app/static/chat.css']:
+        if Path(p).exists():code[p]=hashlib.sha256(Path(p).read_bytes()).hexdigest()
     meta={'database':dbname,'code':code,'chat_model':settings.chat_model,
           'embedding':settings.embed_model,'reranker':settings.rerank_model,'kb_before':kb_before}
     (folder/'metadata.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2),encoding='utf-8')
-    app=FastAPI();app.include_router(chat_router);app.include_router(actions_router)
+    app=FastAPI();app.include_router(chat_router);app.include_router(actions_router);app.include_router(conversations_router)
     records=[]; checks={}
     def save():
         (folder/'records.json').write_text(json.dumps(records,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
@@ -116,6 +121,19 @@ async def main():
             snapshot=await runtime.get_graph().aget_state({'configurable':{'thread_id':str(cid)}})
             tasks=list(snapshot.values['task_plan'].values())
             checks['followup_two_tasks_1001']=len(tasks)==2 and all(t.get('order_id')=='1001' and t['status']=='DONE' for t in tasks)
+            if prefix=='p3-live':
+                public=[e for e in events if e.get('event')=='task_event']
+                reply='\n'.join(e.get('text','') for e in public)
+                checks['p3_one_unified_reply']=len(public)==1
+                checks['p3_verified_facts']=all(v in reply for v in ['1001','智能猫砂盆','成都','SF213502378238'])
+                checks['p3_no_invites_or_internal']=not any(v in reply for v in ['需要我','随时告诉我','本次事项处理结果','PENDING','DONE','内部状态码'])
+                history=await client.get(f'/api/conversations/{cid}/messages')
+                restored=await client.get(f'/api/conversations/{cid}/task-events',params={'user_id':'p2-synthetic'})
+                rows=history.json()['items'];replayed=restored.json()['items']
+                checks['p3_history_matches_public_events']=len([m for m in rows if m['role']=='assistant'])==len(replayed)
+                checks['p3_replay_deduplicated']=len({e['message_id'] for e in replayed})==len(replayed)
+                checks['p3_no_internal_messages']=not any(m['content'].startswith('本次事项处理结果') for m in rows)
+                (folder/'history.json').write_text(json.dumps({'messages':rows,'events':replayed},ensure_ascii=False,indent=2),encoding='utf-8')
             checks['one_selection_total']=sum(e.get('kind')=='select_order' for r in records for e in r['events'])==1
             async with base.async_session() as session:
                 tickets=(await session.execute(select(models.Ticket).where(models.Ticket.conversation_id==cid))).scalars().all()
