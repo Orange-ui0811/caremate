@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    multi_intent_subflows_enabled: bool = False  # Isolated P2 opt-in, leaves original workflow available.
     multi_intent_enabled: bool = False  # 新任务图灰度开关；旧 checkpoint 节点保持可用
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

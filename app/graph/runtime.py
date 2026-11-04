@@ -142,6 +142,7 @@ def _graph_input(user_id: str, message: str, cid: int, msg_id: int,
             "conversation_memory": {}, "memory_segments": [], "memory_error": "",
             "current_message_id": msg_id,
             "task_plan": {}, "task_events": [], "task_decisions": {}, "plan_id": "", 'task_planning_error':False,
+            'subflow_results': {},
             "trace": None}  # merge 通道:None=重置哨兵(见 merge_dict),清上一轮 trace 残留
 
 

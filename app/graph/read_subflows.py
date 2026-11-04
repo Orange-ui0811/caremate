@@ -96,50 +96,55 @@ def schedule(state):
     return {'active': chosen[0] if chosen else -1}
 
 
+async def execute_read(state, *, child=None):
+    child = child or build_business_subflow()
+    tasks = [dict(t) for t in state['tasks']]
+    task = tasks[state['active']]
+    oid = task['order_id']
+    allowed = ['query_order'] + (['query_logistics'] if task['kind'] == 'logistics' else [])
+    query = (f'仅查询订单{oid}的信息。' if task['kind'] == 'order' else f'仅查询订单{oid}的当前物流。')
+    query += '必须实际调用当前任务工具后作答；不要办理或回答其他事项。'
+    local = {'user_id':state['user_id'], 'conversation_id':state['conversation_id'],
+             'current_message_id':state['current_message_id'],
+             'messages':[HumanMessage(query)], 'resolved_query':query,
+             'intent':'订单' if task['kind'] == 'order' else '物流', 'route':'business',
+             'steps':0, 'tokens_used':0, 'trace':None, 'suggested_actions':[],
+             'task_scope':{'order_id':oid,'allowed_tools':allowed,'task_id':task['task_id']}}
+    try:
+        out = await child.ainvoke(local)
+        got = receipts(out)
+        required = set(allowed)
+        unpaid, verified_order = False, False
+        for receipt in got:
+            if receipt.name == 'query_order':
+                try:
+                    value = json.loads(receipt.content)
+                    if isinstance(value,dict) and value.get('order_id') == oid and not value.get('error'):
+                        verified_order = True
+                        unpaid = value.get('status') == '待付款'
+                except (ValueError, TypeError):
+                    pass
+        if unpaid:
+            required = {'query_order'}
+        success = verified_order and required <= {m.name for m in got} and not out['messages'][-1].tool_calls
+        task['status'] = 'DONE' if success else 'FAILED'
+        result = {'task_id':task['task_id'],'kind':task['kind'],'order_id':oid,
+                  'status':task['status'], 'answer':nodes.resolve_answer(out) if success else '本次查询未能完成，请稍后重试。',
+                  'receipts':[{'name':m.name,'content':m.content} for m in got],
+                  'steps':out.get('steps'), 'tokens_used':out.get('tokens_used')}
+        if success and unpaid and task['kind'] == 'logistics':
+            result.update(outcome='UNPAID',answer=f'订单{oid}目前待付款，尚无可供查询的物流进度。')
+    except Exception as exc:
+        task['status'] = 'FAILED'
+        result = {'task_id':task['task_id'],'status':'FAILED','error_type':type(exc).__name__}
+    return {'tasks':tasks, 'results':[*state.get('results',[]),result]}
+
+
 def build_pilot(checkpointer=None, *, interrupt_after=None):
     child = build_business_subflow()
 
     async def execute(state):
-        tasks = [dict(t) for t in state['tasks']]
-        task = tasks[state['active']]
-        oid = task['order_id']
-        allowed = ['query_order'] + (['query_logistics'] if task['kind'] == 'logistics' else [])
-        query = (f'仅查询订单{oid}的信息。' if task['kind'] == 'order' else f'仅查询订单{oid}的当前物流。')
-        query += '必须实际调用当前任务工具后作答；不要办理或回答其他事项。'
-        local = {'user_id':state['user_id'], 'conversation_id':state['conversation_id'],
-                 'current_message_id':state['current_message_id'],
-                 'messages':[HumanMessage(query)], 'resolved_query':query,
-                 'intent':'订单' if task['kind'] == 'order' else '物流', 'route':'business',
-                 'steps':0, 'tokens_used':0, 'trace':None, 'suggested_actions':[],
-                 'task_scope':{'order_id':oid,'allowed_tools':allowed,'task_id':task['task_id']}}
-        try:
-            out = await child.ainvoke(local)
-            got = receipts(out)
-            required = set(allowed)
-            unpaid, verified_order = False, False
-            for receipt in got:
-                if receipt.name == 'query_order':
-                    try:
-                        value = json.loads(receipt.content)
-                        if isinstance(value,dict) and value.get('order_id') == oid and not value.get('error'):
-                            verified_order = True
-                            unpaid = value.get('status') == '待付款'
-                    except (ValueError, TypeError):
-                        pass
-            if unpaid:
-                required = {'query_order'}
-            success = verified_order and required <= {m.name for m in got} and not out['messages'][-1].tool_calls
-            task['status'] = 'DONE' if success else 'FAILED'
-            result = {'task_id':task['task_id'],'kind':task['kind'],'order_id':oid,
-                      'status':task['status'], 'answer':nodes.resolve_answer(out) if success else '本次查询未能完成，请稍后重试。',
-                      'receipts':[{'name':m.name,'content':m.content} for m in got],
-                      'steps':out.get('steps'), 'tokens_used':out.get('tokens_used')}
-            if success and unpaid and task['kind'] == 'logistics':
-                result.update(outcome='UNPAID',answer=f'订单{oid}目前待付款，尚无可供查询的物流进度。')
-        except Exception as exc:
-            task['status'] = 'FAILED'
-            result = {'task_id':task['task_id'],'status':'FAILED','error_type':type(exc).__name__}
-        return {'tasks':tasks, 'results':[*state.get('results',[]),result]}
+        return await execute_read(state, child=child)
 
     b = StateGraph(PilotState)
     b.add_node('plan', plan)

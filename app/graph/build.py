@@ -7,7 +7,7 @@ from app.graph.routing import confidence_gate, route_by_intent, should_continue
 from app.graph.state import ConversationState
 
 
-def _builder() -> StateGraph:
+def _builder(*, subflows=False) -> StateGraph:
     b = StateGraph(ConversationState)
     for name, fn in {"task_precheck": tasks.precheck, "task_safety": tasks.safety,
                      'task_plan':tasks.plan,'task_prepare_read':tasks.prepare_refund,
@@ -21,7 +21,10 @@ def _builder() -> StateGraph:
     b.add_conditional_edges("task_precheck", lambda s: "multi" if s.get("plan_id") else "single",
                             {"multi": "task_safety", "single": "resolve_reference"})
     b.add_edge('task_safety','task_plan')
-    b.add_conditional_edges('task_plan',tasks.plan_route,{'multi':'task_schedule','single':'resolve_reference','failed':END})
+    if subflows:
+        from app.graph import subflow_tasks
+        subflow_tasks.install(b)
+    b.add_conditional_edges('task_plan',tasks.plan_route,{'multi':'sf_schedule' if subflows else 'task_schedule','single':'resolve_reference','failed':END})
     b.add_conditional_edges("task_schedule", tasks.next_task,
                             {"refund": "task_prepare_refund", "complaint": "task_complaint",
                              'read':'task_prepare_read','knowledge':'task_knowledge','other':'task_unsupported',
@@ -30,8 +33,8 @@ def _builder() -> StateGraph:
     b.add_edge('task_prepare_read','task_select_order')
     b.add_conditional_edges('task_select_order',tasks.after_selection,{'refund':'task_refund','read':'task_read'})
     b.add_edge('task_read','task_schedule')
-    b.add_edge('task_knowledge','task_schedule')
-    b.add_edge('task_unsupported','task_schedule')
+    b.add_edge('task_knowledge','sf_schedule' if subflows else 'task_schedule')
+    b.add_edge('task_unsupported','sf_schedule' if subflows else 'task_schedule')
     b.add_edge("task_refund", "task_schedule")
     b.add_edge("task_complaint", "task_schedule")
     b.add_edge("task_wait", "task_commit")
@@ -85,5 +88,7 @@ def _builder() -> StateGraph:
     return b
 
 
-def build_graph(checkpointer=None):
-    return _builder().compile(checkpointer=checkpointer)
+def build_graph(checkpointer=None, *, subflows=None):
+    from app.config import settings
+    enabled = settings.multi_intent_subflows_enabled if subflows is None else subflows
+    return _builder(subflows=enabled).compile(checkpointer=checkpointer)

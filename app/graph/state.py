@@ -16,6 +16,7 @@ def merge_dict(a: dict | None, b: dict | None) -> dict:
 
 
 class ConversationState(TypedDict, total=False):
+    subflow_results: dict
     task_scope: dict  # Experimental subflow: trusted task/tool/object boundary.
     business_context: dict  # 已核验订单指代与归属明确的用户陈述；不保存操作授权
     multi_intent_enabled: bool  # 会话固定模式；中断恢复也沿用，不随浏览器开关变化
