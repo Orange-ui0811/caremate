@@ -25,11 +25,15 @@ def copied(state):
 
 
 async def schedule(state):
+    items=copied(state)
+    if state.get('task_plan_version')==2:
+        from app.graph.task_dependencies import refresh
+        refresh(items,state['user_id'])
     await workflow.save_plan(state['conversation_id'], state['user_id'], state['plan_id'],
-                             state['current_message_id'], state['task_plan'])
-    pending = [k for k,t in state['task_plan'].items() if t['status']=='PENDING']
+                             state['current_message_id'], items)
+    pending = [k for k,t in items.items() if t['status']=='PENDING']
     return {'active_task':min(pending,key=lambda k:PRIORITY.get(state['task_plan'][k]['kind'],9)) if pending else '',
-            'task_events':[], 'subflow_presentation':True}
+            'task_plan':items,'task_events':[], 'subflow_presentation':True}
 
 
 def route(state):
@@ -51,12 +55,22 @@ async def prepare(state):
         task.update(status='WAITING_USER',step='select_order',blocking=True)
     else:
         task.update(status='RUNNING',step='execute',blocking=False)
+    if state.get('task_plan_version')==2:
+        from app.core.task_context import packet
+        task['task_context']=packet(state,task)
+        if task['kind']=='knowledge' and task.get('context_order_id'):
+            try:
+                facts=business.order_snapshot(task['context_order_id'])
+                if not facts.get('product'):raise ValueError('订单商品资料缺失')
+                task['task_context']['order_facts']=facts
+            except Exception as exc:
+                task.update(status='FAILED',outcome='upstream_order:'+type(exc).__name__)
     return {'task_plan':items,'task_events':[]}
 
 
 def dispatch(state):
     t=state['task_plan'][state['active_task']]
-    if t['status']=='WAITING_USER':return 'schedule'
+    if t['status']!='RUNNING':return 'schedule'
     return 'read' if t['kind'] in {'order','logistics'} else t['kind']
 
 
@@ -66,20 +80,38 @@ async def select_order(state):
     task=items[key]; uid=state['user_id']
     orders=business.list_user_orders(uid)
     if not orders:
-        task.update(status='CANCELLED',step='no_orders')
+        if state.get('task_plan_version')==2:
+            from app.graph.task_dependencies import cancel_group
+            cancel_group(items,key)
+        else:task.update(status='CANCELLED',step='no_orders')
         return {'task_plan':items,'task_events':[]}
+    purposes={'refund':'申请退款审核','order':'查询订单商品','logistics':'查询物流','knowledge':'查询商品说明'}
+    selection_prompt={'refund':'请选择要申请退款审核的订单：','order':'请选择要查询的订单：',
+                       'logistics':'请选择要查询物流的订单：','knowledge':'请选择要查询商品说明的订单：'}[task['kind']]
+    if state.get('task_plan_version')==2:
+        group=task.get('subject_ref')
+        labels=list(dict.fromkeys(purposes[t['kind']] for k,t in items.items()
+            if (k==key or (group and t.get('subject_ref')==group)) and t['kind'] in purposes
+            and t['status'] in {'WAITING_USER','WAITING_DEPENDENCY'}))
+        selection_prompt='请确认用于'+ '、'.join(labels)+'的订单（同一笔订单只需选择一次）：'
     value=interrupt({'type':'select_order','orders':orders,'can_cancel':True,
         'plan_id':state['plan_id'],'task_id':task['task_id'],'task_kind':task['kind'],
-        'selection_prompt':{'refund':'请选择要申请退款审核的订单：','order':'请选择要查询的订单：',
-                            'logistics':'请选择要查询物流的订单：'}[task['kind']]})
+        'selection_prompt':selection_prompt})
     if value=={'cancelled':True}:
-        task.update(status='CANCELLED',step='cancelled')
+        if state.get('task_plan_version')==2:
+            from app.graph.task_dependencies import cancel_group
+            cancel_group(items,key)
+        else:task.update(status='CANCELLED',step='cancelled')
         return {'task_plan':items,'task_events':[]}
     if not isinstance(value,str) or not business.owns_order(uid,value):
         raise ValueError('无效订单选择，未执行业务')
+    if task['kind']=='knowledge':task['context_order_id']=value
     task.update(order_id=value,binding={'status':'resolved','method':'user_selection','order_ids':[value]},
                 status='PENDING',step='selected',blocking=False)
     context=order_context.selected(state,items,key,value)
+    if state.get('task_plan_version')==2:
+        from app.graph.task_dependencies import refresh
+        refresh(items,uid)
     # A selection is shared only within the binder's explicit referent group.
     for other in items.values():
         if (other['status']=='WAITING_USER' and other.get('step')=='select_order'
@@ -122,7 +154,8 @@ async def complaint(state):
 
 
 async def knowledge(state):
-    return await quiet(legacy.knowledge,{**state,'subflow_presentation':True})
+    task=state['task_plan'][state['active_task']]
+    return await quiet(legacy.knowledge,{**state,'subflow_presentation':True,'task_context':task.get('task_context',{})})
 
 
 async def unsupported(state):

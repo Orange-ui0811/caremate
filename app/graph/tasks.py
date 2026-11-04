@@ -10,6 +10,7 @@ from app.tools import business
 from app.core import task_planner
 from app.core import workflow_mode
 from app.core import order_context
+from app.config import settings
 
 SAFETY_NOTICE = "请立即停止使用该设备，远离设备和潮湿区域，不要触碰疑似带电部位或自行拆修。请在确保安全的情况下联系专业人员处理；如有人员受伤或持续危险，请及时联系当地应急服务。"
 
@@ -35,23 +36,31 @@ async def precheck(state):
     kinds = ["safety"] if safety else []
     tasks = {kind: {"task_id": prefix + ":" + kind, "kind": kind, "status": "PENDING"} for kind in kinds}
     return {"task_plan": tasks, "plan_id": prefix, "task_origin": raw,
-            "task_events": [], "task_decisions": {}, "task_dispatches": 0}
+            "task_events": [], "task_decisions": {}, "task_dispatches": 0,
+            'task_plan_version':2 if settings.multi_intent_context_v2_enabled else 1}
 
 
 async def plan(state):
     tasks = {k:dict(v) for k,v in state['task_plan'].items()}
     try:
-        items = await task_planner.extract(state['task_origin'])
-        items = order_context.bind_tasks(state['task_origin'], items, state.get('business_context') or {}, state['user_id'])
+        planning_context={}
+        if state.get('task_plan_version')==2:
+            from app.core import task_context
+            planning_context=task_context.build(state)
+            items=await task_planner.extract(state['task_origin'],context=planning_context)
+        else:
+            items = await task_planner.extract(state['task_origin'])
+            items = order_context.bind_tasks(state['task_origin'], items, state.get('business_context') or {}, state['user_id'])
         counts={}
         for item in items:
             kind=item['kind'];counts[kind]=counts.get(kind,0)+1
             key=kind if counts[kind]==1 else f'{kind}:{counts[kind]}'
             tasks[key]={**item,'task_id':state['plan_id']+':'+key,'status':'PENDING'}
         if not tasks or (len(tasks)==1 and next(iter(tasks.values()))['kind'] in ('knowledge','other')
-                         and not next(iter(tasks.values())).get('context_order_id')):
+                         and not next(iter(tasks.values())).get('context_order_id')
+                         and not next(iter(tasks.values())).get('subject_ref')):
             return {'task_plan':{},'plan_id':'','task_events':[],'task_planning_error':False}
-        return {'task_plan':tasks,'task_events':[], 'task_planning_error':False}
+        return {'task_plan':tasks,'task_events':[], 'task_planning_error':False,'planning_context':planning_context}
     except Exception:
         text='暂时无法可靠拆解这条消息中的全部事项，请分别说明需要办理的业务。本轮尚未发起其他业务操作。'
         ev=await workflow.event(state['conversation_id'],state['user_id'],state['plan_id']+':planning-error',text)
@@ -63,7 +72,7 @@ def plan_route(state):
     business_tasks=[t for t in state['task_plan'].values() if t['kind']!='safety']
     if not state['task_plan'] or (len(business_tasks)==1 and len(state['task_plan'])==1
                                   and business_tasks[0]['kind'] in ('knowledge','other')
-                                  and not business_tasks[0].get('context_order_id')):
+                                  and not business_tasks[0].get('context_order_id') and not business_tasks[0].get('subject_ref')):
         return 'single'
     return 'multi'
 
@@ -297,6 +306,8 @@ async def knowledge(state):
                 'answer':'','evidence':'','citations':[],'suggested_actions':[]}
         result=await nodes.retrieve_knowledge(scoped)
         task['retrieval_trace'] = result.get('trace', {})
+        task['retrieval_snapshot'] = result.get('retrieved_snapshot', [])
+        task['evidence_gate'] = 'passed' if result.get('evidence_strong') else result.get('fallback_source','insufficient_evidence')
         task['evidence_confidence'] = result.get('evidence_confidence')
         if not result.get('evidence_strong'):raise ValueError('缺少证据')
         context_note = ('\n当前订单资料：'+json.dumps(context,ensure_ascii=False)+

@@ -10,13 +10,14 @@ NEW_OBJECT = re.compile(r'另一|另外|其他|换一(?:笔|个|单)|不是这|�
 AFTERSALES = re.compile(r'退货|退款|换货|保修|维修|售后|质量|漏电|故障|清洗')
 ISSUE = re.compile(r'漏电|触电|冒烟|起火|坏|故障|破损|质量|少发|漏发|发错|不能用|损坏')
 PRODUCT = re.compile(r'猫砂盆|饮水机|猫爬架|猫粮|猫窝|猫砂|玩具')
-PROVEN = {'user_selection', 'task_clause', 'adjacent_order_subject', 'adjacent_order_subject_action',
+PROVEN = {'context_v2', 'user_selection', 'task_clause', 'adjacent_order_subject', 'adjacent_order_subject_action',
           'explicit_same_message_reference', 'explicit_parallel_orders',
           'conversation_reference', 'selected_reference_group'}
 
 
 def _supported(tasks, uid):
-    return [t for t in tasks.values() if t.get('kind') in binding.ORDER_KINDS
+    return [t for t in tasks.values() if (t.get('kind') in binding.ORDER_KINDS or
+            (t.get('kind')=='knowledge' and t.get('plan_version')==2))
             and t.get('binding', {}).get('method') in PROVEN
             and t.get('binding', {}).get('status') == 'resolved'
             and business.owns_order(uid, t.get('order_id') or '')]
@@ -39,7 +40,12 @@ def restore(previous, plans, uid, cid):
         for t in _supported(p.get('tasks', {}), uid):
             if t['kind'] == 'refund' and (t['order_id'] not in issues or ISSUE.search(t.get('source', ''))):
                 issues[t['order_id']] = {'text': t.get('source', ''), 'message_id': p['origin']}
-    return {'user_id': uid, 'conversation_id': cid, 'order_ids': ids,
+    sources = dict(old.get('order_sources', {}))
+    for p in reversed(ordered):
+        for t in _supported(p.get('tasks', {}), uid):
+            sources[t['order_id']] = {'kind':'verified_task','message_id':p['origin'],
+                                      'task_id':t.get('task_id'),'method':t['binding']['method']}
+    return {'user_id': uid, 'conversation_id': cid, 'order_ids': ids, 'order_sources':sources,
             'recent': bool(_supported(previous.get('task_plan', {}), uid)) or any(
                 t.get('context_order_id') in ids for t in previous.get('task_plan', {}).values()),
             'user_reports': {o: issues[o] for o in ids if o in issues}}
@@ -112,6 +118,8 @@ def selected(state, tasks, current_key, oid):
         for key, other in tasks.items():
             if key == current_key or other.get('reference_group') != group:
                 continue
+            if state.get('task_plan_version')==2 and other['status'] in {'DONE','FAILED','CANCELLED','SUPERSEDED'}:
+                continue
             if other['kind'] in binding.ORDER_KINDS and not other.get('order_id'):
                 other.update(order_id=oid, binding={'status':'resolved','method':'selected_reference_group','order_ids':[oid]})
             elif other['kind'] == 'knowledge':
@@ -130,7 +138,7 @@ def knowledge_context(state, task):
     oid = task.get('context_order_id')
     if not oid or not business.owns_order(state['user_id'], oid):
         return None
-    order = business.order_snapshot(oid)
+    order = (task.get('task_context') or {}).get('order_facts') or business.order_snapshot(oid)
     report = (state.get('business_context') or {}).get('user_reports', {}).get(oid, {})
     return {'order_id':oid, 'product':order.get('product'), 'status':order.get('status'),
             'user_reported_issue':report.get('text', ''), 'source_message_id':report.get('message_id')}

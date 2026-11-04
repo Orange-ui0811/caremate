@@ -68,7 +68,7 @@ async def supersede(cid, uid, origin):
         for row in rows:
             if row.key.startswith("plan:") and row.payload["origin"] < origin:
                 row.payload = {**row.payload, "tasks": {k: {**t, "status": "SUPERSEDED"}
-                    if t["status"] in {"PENDING", "RUNNING", "WAITING_USER"} else t
+                    if t["status"] in {"PENDING", "RUNNING", "WAITING_USER", "WAITING_DEPENDENCY"} else t
                     for k, t in row.payload["tasks"].items()}}
         await session.commit()
 

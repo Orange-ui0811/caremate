@@ -25,7 +25,7 @@ def safe(value):
 
 
 def knowledge_text(text):
-    if re.search(r'本次事项处理结果|\b(?:PENDING|WAITING_USER|RUNNING|DONE|task_id|operation_id)\b',text):
+    if re.search(r'本次事项处理结果|\b(?:PENDING|WAITING_USER|WAITING_DEPENDENCY|RUNNING|DONE|task_id|operation_id)\b',text):
         return '这条知识问题的答复暂时无法可靠呈现，需要人工进一步核实。'
     lines=text.rstrip().splitlines()
     while lines and (not lines[-1].strip() or re.match(
@@ -73,7 +73,10 @@ def compose(state):
                     local[str(c.get('n'))]=str(found)
                 text=re.sub(r'\[(\d+)\]',lambda m:'['+local[m[1]]+']' if m[1] in local else '',text)
                 if text:parts.append(text)
-            else:parts.append('这条知识问题暂时缺少充分依据，需要人工进一步核实。')
+            elif status=='CANCELLED':parts.append('已取消本次商品资料查询。')
+            elif status=='FAILED':
+                parts.append('暂时未能取得该订单的商品资料，请稍后重试。' if t.get('outcome','').startswith('upstream_order:')
+                             else '这条知识问题暂时缺少充分依据，需要人工进一步核实。')
         elif kind=='other':parts.append('部分诉求暂时无法自动办理，需要人工进一步处理。')
     for oid,items in groups.items():
         order={}; shipping={}
@@ -101,7 +104,7 @@ def compose(state):
         parts.insert(0,'\n'.join(lines))
     waiting=[t for _,t in changed if t.get('step')=='select_order' and t['status']=='WAITING_USER']
     if waiting:
-        labels={'order':'查询订单','logistics':'查询物流','refund':'申请退款审核'}
+        labels={'order':'查询订单','logistics':'查询物流','refund':'申请退款审核','knowledge':'查询商品说明'}
         purposes=list(dict.fromkeys(labels.get(t['kind'],'办理售后') for t in waiting))
         parts.append('、'.join(purposes)+'前，需要先确认对应订单。')
     return '\n\n'.join(dict.fromkeys(parts)),citations,now

@@ -16,6 +16,9 @@ def merge_dict(a: dict | None, b: dict | None) -> dict:
 
 
 class ConversationState(TypedDict, total=False):
+    task_plan_version: int
+    planning_context: dict
+    task_context: dict
     subflow_results: dict
     subflow_presented: dict
     subflow_reply_id: str

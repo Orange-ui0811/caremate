@@ -109,6 +109,7 @@ async def execute_read(state, *, child=None):
              'messages':[HumanMessage(query)], 'resolved_query':query,
              'intent':'订单' if task['kind'] == 'order' else '物流', 'route':'business',
              'steps':0, 'tokens_used':0, 'trace':None, 'suggested_actions':[],
+             'task_context':task.get('task_context',{}),
              'task_scope':{'order_id':oid,'allowed_tools':allowed,'task_id':task['task_id']}}
     try:
         out = await child.ainvoke(local)
