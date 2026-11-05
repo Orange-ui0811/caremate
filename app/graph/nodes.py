@@ -659,9 +659,14 @@ async def log_node(state) -> dict:
     answer = resolve_answer(state)
     message_id = None
     if state.get("conversation_id"):
+        activities = turn_activities(state)
+        if state.get('citations'):
+            # Keep the exact per-reply numbering and evidence snapshot in the
+            # existing JSON metadata; later tasks may use a different [1].
+            activities.append({'kind':'citations','items':state['citations']})
         message_id = await repository.append_message(
             state["conversation_id"], "assistant",
-            content=answer or None, activities=turn_activities(state))
+            content=answer or None, activities=activities)
     if answer:
         # 只检查本轮最后一条消息。上一轮即使有完全相同的兜底,也不能省掉本轮回复。
         last = (state.get("messages") or [None])[-1]

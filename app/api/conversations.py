@@ -69,7 +69,8 @@ async def list_messages(conversation_id: int):
     msgs = await repository.list_dialog_messages(conversation_id)
     return {"items": [
         {"id": m.id, "role": m.role, "content": m.content or "",
-         "activities": getattr(m, "activities", None) or [],
+         "activities": [a for a in (getattr(m,"activities",None) or []) if a.get('kind')!='citations'],
+         "citations": next((a['items'] for a in (getattr(m,"activities",None) or []) if a.get('kind')=='citations'),[]),
          "created_at": m.created_at.isoformat() if m.created_at else None}
         for m in msgs
     ]}

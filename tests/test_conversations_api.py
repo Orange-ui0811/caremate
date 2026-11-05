@@ -63,6 +63,18 @@ def test_list_messages_404_when_missing(conv_client, monkeypatch):
     assert conv_client.get("/api/conversations/999999/messages").status_code == 404
 
 
+def test_history_citations_are_returned_separately_from_activity_badges(conv_client,monkeypatch):
+    from app.api import conversations as api
+    citations=[{'n':6,'id':20,'answer':'质量问题运费由平台承担'}]
+    async def get(cid):return object()
+    async def messages(cid):return [SimpleNamespace(id=522,role='assistant',content='运费由平台承担[6]',created_at=None,
+        activities=[{'kind':'retrieval','name':'retrieve_policy'},{'kind':'citations','items':citations}])]
+    monkeypatch.setattr(api.repository,'get_conversation',get)
+    monkeypatch.setattr(api.repository,'list_dialog_messages',messages)
+    row=conv_client.get('/api/conversations/136/messages').json()['items'][0]
+    assert row['citations']==citations and row['activities']==[{'kind':'retrieval','name':'retrieve_policy'}]
+
+
 def test_delete_conversation_scoped_and_repeatable(conv_client, monkeypatch):
     from app.api import conversations as api
     calls = []

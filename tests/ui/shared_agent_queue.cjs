@@ -11,18 +11,25 @@ const sse=events=>events.map(e=>'data: '+JSON.stringify(e)+'\n\n').join('')+'dat
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{localStorage.setItem('mewhelp_session_id','alice');localStorage.setItem('caremate_multi_intent_mode','multi');});
   let submitted=0,resumed=0,chats=0;
+  const refundCites=[{n:6,id:20,section_path:'退换货运费',answer:'质量问题运费由平台承担'},
+                     {n:2,id:21,section_path:'保修说明',answer:'电子类商品保修12个月'}];
+  const complaintCites=[{n:6,id:44,section_path:'投诉登记',answer:'投诉工单须用户确认后登记'}];
   await page.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());
    if(url.hostname!=='mewhelp.test')return route.fulfill({body:''});
    if(url.pathname==='/api/conversations')return route.fulfill({json:{items:[]}});
    if(url.pathname.endsWith('/workflow-mode'))return route.fulfill({json:{multi_intent_enabled:true}});
-   if(url.pathname.endsWith('/messages')||url.pathname.endsWith('/task-events'))return route.fulfill({json:{items:[],interrupt:null}});
+   if(url.pathname.endsWith('/messages'))return route.fulfill({json:{items:[
+    {id:1,role:'assistant',content:'质量问题运费由平台承担[6]，保修12个月[2]。',citations:refundCites},
+    {id:2,role:'assistant',content:'投诉登记需要确认[6]。',citations:complaintCites}]}});
+   if(url.pathname.endsWith('/task-events'))return route.fulfill({json:{items:[],interrupt:null}});
    if(url.pathname==='/api/chat'){
     chats++;assert.equal(req.postDataJSON().multi_intent_enabled,true);
     return route.fulfill({contentType:'text/event-stream',body:sse([
      {event:'task_start'},{delta:'**商品信息**\n- 智能猫砂盆。'},
      {event:'task_start'},{delta:'**物流信息**\n- 已揽件，成都。'},
-     {event:'task_start'},{delta:'请在原退款表单确认。'},
+     {event:'task_start'},{event:'citations',items:refundCites},
+     {delta:'质量问题运费由平台承担[6]，保修12个月[2]。请在原退款表单确认。'},
      {event:'interrupt',kind:'task_form',conversation_id:7,interrupt_id:'form-'+chats,request_id:'refund-'+chats,
       form:{type:'refund_form',draft:{order_id:'1001',reason:'质量问题'}}}
     ])});
@@ -35,7 +42,7 @@ const sse=events=>events.map(e=>'data: '+JSON.stringify(e)+'\n\n').join('')+'dat
     const body=req.postDataJSON();resumed++;assert.equal(body.conversation_id,7);
     if(resumed===1){assert.equal(submitted,1);assert.equal(body.interrupt_id,'form-1');assert.equal(body.confirmed,true);
      return route.fulfill({contentType:'text/event-stream',body:sse([
-      {event:'task_start'},{delta:'请确认投诉工单内容。'},
+      {event:'task_start'},{event:'citations',items:complaintCites},{delta:'请确认投诉工单内容[6]。'},
       {event:'interrupt',kind:'confirm_ticket',conversation_id:7,interrupt_id:'ticket-1',preview:{ticket_type:'投诉',description:'商品无法开机'}}
      ])});}
     if(resumed===2){assert.equal(body.interrupt_id,'ticket-1');assert.equal(body.confirmed,true);}
@@ -55,12 +62,18 @@ const sse=events=>events.map(e=>'data: '+JSON.stringify(e)+'\n\n').join('')+'dat
   await ask();
   assert.equal(await page.locator('#messages strong').filter({hasText:'商品信息'}).count(),1);
   assert.equal(await page.locator('#messages strong').filter({hasText:'物流信息'}).count(),1);
+  assert.equal(await page.locator('.cite').count(),2);
+  await page.locator('.cite').filter({hasText:'[6]'}).first().click();
+  assert.match(await page.locator('.cite-pop').innerText(),/质量问题运费由平台承担/);
   await page.getByRole('button',{name:'提交退款工单',exact:true}).click();
   assert.equal(await page.locator('#refundOrder').inputValue(),'1001');
   await page.locator('#refundReason').selectOption({label:'质量问题'});
   await page.locator('#refundSubmit').click();
   await page.waitForSelector('.ticket-confirm');await idle();
   await page.waitForFunction(()=>getComputedStyle(document.getElementById('refundMask')).visibility==='hidden');
+  await page.locator('.cite').filter({hasText:'[6]'}).last().click();
+  assert.match(await page.locator('.cite-pop').innerText(),/投诉工单须用户确认后登记/);
+  await page.keyboard.press('Escape');
   await page.screenshot({path:path.join(out,'shared-agent-confirmation.png')});
   await page.getByRole('button',{name:'确认提交',exact:true}).click();await idle();
   assert.equal(resumed,2);assert.equal(await page.locator('.workflow-controls').count(),0);
@@ -68,7 +81,13 @@ const sse=events=>events.map(e=>'data: '+JSON.stringify(e)+'\n\n').join('')+'dat
   assert.equal(resumed,3);assert.equal(submitted,1);assert.deepEqual(errors,[]);
   assert(!/task_id|operation_id|本次事项处理结果/.test(await page.locator('#messages').innerText()));
   await page.screenshot({path:path.join(out,'shared-agent-completed.png')});
+  await page.reload();await idle();
+  assert.equal(await page.locator('.cite').count(),3);
+  await page.locator('.cite').filter({hasText:'[6]'}).first().click();
+  assert.match(await page.locator('.cite-pop').innerText(),/质量问题运费由平台承担/);
+  await page.locator('.cite').filter({hasText:'[6]'}).last().focus();await page.keyboard.press('Enter');
+  assert.match(await page.locator('.cite-pop').innerText(),/投诉工单须用户确认后登记/);
   fs.writeFileSync(path.join(out,'ui-result.json'),JSON.stringify({pass:true,submitted,resumed,errors},null,2));
-  console.log('PASS original forms, streamed Markdown bubbles, resume, cancellation, no internal status');
+  console.log('PASS original forms, streaming citations before interrupts, per-task sources, keyboard activation and history reload');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

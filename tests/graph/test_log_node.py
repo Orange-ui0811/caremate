@@ -38,3 +38,12 @@ async def test_log_node_persists_low_confidence_retrieval_activity(monkeypatch):
     await nodes.log_node({"conversation_id": 1, "answer": "暂未查到",
                           "trace": {"forced_rag": True, "confidence": "weak"}})
     assert saved["activities"] == [{"kind": "retrieval", "name": "retrieve_knowledge"}]
+
+
+async def test_log_node_retains_exact_reply_citation_snapshot(monkeypatch):
+    saved={}
+    async def append(*args,**kw):saved.update(kw)
+    monkeypatch.setattr(nodes.repository,'append_message',append)
+    citations=[{'n':6,'id':20,'answer':'质量问题退货运费由平台承担','section_path':'退换货运费'}]
+    await nodes.log_node({'conversation_id':136,'answer':'运费由平台承担[6]。','citations':citations})
+    assert saved['activities']==[{'kind':'citations','items':citations}]

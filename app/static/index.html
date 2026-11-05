@@ -912,6 +912,7 @@
           if (!textStarted) { textEl.innerHTML = ""; textStarted = true; }
           raw += delta;
           textEl.innerHTML = renderMarkdown(raw);
+          if (citations.length) decorateCitations(textEl, citations);
           messagesEl.scrollTop = messagesEl.scrollHeight;
         },
         tool: (toolName) => {
@@ -924,10 +925,14 @@
           appendActivity(badgesEl, activity);
           messagesEl.scrollTop = messagesEl.scrollHeight;
         },
-        citations: (items) => { citations = items; },
+        citations: (items) => {
+          citations = items;
+          if (textStarted && textEl) decorateCitations(textEl, citations);
+        },
         actions: (items) => { actions = items; },
         interrupt: (data) => {
           interrupted = true;
+          if (textStarted && citations.length) decorateCitations(textEl, citations);
           if (!structured) { bubble.innerHTML = ""; structured = true; }
           // ch08:中断按 kind 分发——select_order 弹订单卡,confirm_ticket 弹工单预览卡
           renderWorkflowInterrupt(eventBubble || bubble,data);
@@ -1128,6 +1133,7 @@
               const textEl = document.createElement("div");
               textEl.className = "bubble-text";
               textEl.innerHTML = renderMarkdown(m.content);
+              if (m.citations?.length) decorateCitations(textEl, m.citations);
               bubble.appendChild(textEl);
               const hit = REPLAY_ACTIONS.find((ra) => m.content.trim() === ra.text);
               if (hit) renderActions(bubble, hit.actions);
