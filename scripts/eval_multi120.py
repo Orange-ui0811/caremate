@@ -176,7 +176,7 @@ async def worker(arm,case_id,rep,pilot=False):
     await runtime.init_graph();api=FastAPI();api.include_router(router)
     started=time.perf_counter();steps=[];actor=[];cid=None;authorized=[];seen_forms=set();followed=False;restarted=False;duplicate_done=False
     result={'arm':arm,'rep':rep,'case_id':case_id,'case':case,'status':'running','steps':steps,'actor':actor,
-            'authorized':authorized,'fault_checks':[],'wrong_previews':[],'clarifications':[]}
+            'authorized':authorized,'fault_checks':[],'wrong_previews':[],'clarifications':[],'selector_events':[]}
     async def tickets_now():
         if cid is None:return []
         async with base.async_session() as sess:
@@ -186,6 +186,7 @@ async def worker(arm,case_id,rep,pilot=False):
         s=out['state'];step={'answer':nodes.resolve_answer(s),'interrupt':out.get('interrupt'),
             'actions':runtime.dedup_actions(s.get('suggested_actions',[])),
             'task_plan_diagnostic_only':s.get('task_plan',{}),'trace':s.get('trace',{}),
+            'citations':s.get('citations',[]),'retrieved_snapshot':s.get('retrieved_snapshot',[]),
             'tickets_before_next_actor':await tickets_now(),'authorized_count':len(authorized),
             'elapsed':time.perf_counter()-started}
         steps.append(step);save(directory/'progress.json',result);return step
@@ -225,6 +226,8 @@ async def worker(arm,case_id,rep,pilot=False):
                     actor.append({'kind':'restart_sqlite_connection'});result['fault_checks'].append({'connection_reopened':True})
                 kind=intr['type']
                 if kind=='select_order':
+                    # Record every actual public card, even when no target can be resolved.
+                    result['selector_events'].append({'step':index,'public_payload':intr})
                     purpose=intr.get('task_kind')
                     if not purpose:
                         kinds={g['kind'] for g in case['goals'] if g['kind'] in ('refund','order','logistics')}
@@ -312,11 +315,10 @@ async def worker(arm,case_id,rep,pilot=False):
                 acted=True
             # Allow one cooperative textual response only when a target was intentionally omitted
             # and the service actually asks for an order number. Never prompt it to add missing goals.
-            if not acted and not any(a['kind']=='supply_missing_order' for a in actor):
-                import re
-                pending=[g for g in case['goals'] if g['kind'] in ('refund','order','logistics') and not g['explicit_order']]
-                if len(pending)==1 and re.search(r'(?:提供|告诉|告知|补充|需要|确认|选择).{0,24}(?:订单|单号)|(?:订单号).{0,12}(?:多少|什么)',step['answer']):
-                    g=pending[0];text=f"这项{g['kind']}对应的订单号是{g['order_id']}。其他原有事项继续，不增加新事项。"
+            if not acted:
+                from scripts.multi120_evidence_protocol import cooperative_order_reply
+                text=cooperative_order_reply(case,step,steps[-2]['answer'] if len(steps)>1 else '',actor)
+                if text:
                     actor.append({'kind':'supply_missing_order','text':text});out=await runtime.run_turn(uid,text,cid);continue
             break
         else:result['actor_limit']=True

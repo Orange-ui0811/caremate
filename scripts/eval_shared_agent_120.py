@@ -42,7 +42,7 @@ async def prepare():
     for name in ['cases.json','knowledge.json','scoring.json','CASES.md']:shutil.copy2(BASE/name,OUT/name)
     shutil.copytree(ROOT/'app',OUT/'source/app',ignore=shutil.ignore_patterns('__pycache__'))
     shutil.copy2(HOME/'data/runtime_settings.json',OUT/'runtime_settings.json')
-    scripts=['eval_shared_agent_120.py','eval_multi120.py','score_multi120.py','score_multi120_chronological.py','eval_subflows_p4.py','eval_subflows_p4_reuse.py']
+    scripts=['__init__.py','eval_shared_agent_120.py','eval_multi120.py','multi120_evidence_protocol.py','score_multi120.py','score_multi120_chronological.py','eval_subflows_p4.py','eval_subflows_p4_reuse.py']
     (OUT/'evaluator-source/scripts').mkdir(parents=True)
     (OUT/'evaluator-source/scripts/__init__.py').write_text('',encoding='utf-8')
     for name in scripts:shutil.copy2(ROOT/'scripts'/name,OUT/'evaluator-source/scripts'/name)

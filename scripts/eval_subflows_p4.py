@@ -81,7 +81,7 @@ async def prepare():
     for arm,source in [('disabled',BASE/'source/app'),('enabled',ROOT/'app')]:
         shutil.copytree(source,OUT/'source'/arm/'app',ignore=shutil.ignore_patterns('__pycache__'))
     evaluator=OUT/'evaluator-source';evaluator.mkdir()
-    helpers=['eval_multi120.py','score_multi120.py','score_multi120_chronological.py','eval_subflows_p4.py']
+    helpers=['eval_multi120.py','multi120_evidence_protocol.py','score_multi120.py','score_multi120_chronological.py','eval_subflows_p4.py']
     for name in helpers:shutil.copy2(ROOT/'scripts'/name,evaluator/name)
     cases=read(OUT/'cases.json');families={}
     for c in cases:families.setdefault(c['family_id'],c['id'])
