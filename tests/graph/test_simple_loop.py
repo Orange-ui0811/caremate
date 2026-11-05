@@ -173,6 +173,16 @@ def test_control_copy_never_confuses_order_selection_and_submission():
     assert '已提交' in text and '确认' not in text
 
 
+def test_fact_renderer_does_not_receive_sibling_write_or_original_full_request():
+    raw='查询订单1001的物流，并对订单2002申请退款'
+    task={'kind':'logistics','query':'查询订单1001物流','source':raw,'order_id':'1001',
+          'status':'done','result':{'logistics':{'status':'已揽件','current_city':'成都'}}}
+    messages=simple_loop.presentation_messages({'task_origin':raw,'messages':[AIMessage('订单2002待付款',id='db-1')]},[task],'仅表达事实')
+    material='\n'.join(m.content for m in messages)
+    assert '1001' in material and '成都' in material
+    assert '2002' not in material and '申请退款' not in material and 'source' not in material
+
+
 async def test_chat_409_keeps_card_and_watermark(setup,monkeypatch,tmp_path):
     import httpx
     from fastapi import FastAPI
@@ -215,6 +225,23 @@ async def test_v1_card_still_resumes_when_simple_enabled(wired,monkeypatch,tmp_p
         monkeypatch.setattr(simple_intents,'classify',forbidden)
         out,_=await old_resume(graph,monkeypatch,first['conversation_id'],'1001')
         assert out['state']['task_plan_version']==1 and out['interrupt'] is None
+
+
+async def test_v2_card_still_resumes_when_simple_enabled(wired,monkeypatch,tmp_path):
+    from tests.graph.test_context_v2 import install
+    from tests.graph.test_subflow_tasks import invoke_new,resume as old_resume
+    monkeypatch.setattr(settings,'multi_intent_simple_enabled',False)
+    install(monkeypatch)
+    async def retrieve(s):return {'evidence_strong':False,'fallback_source':'self_check','trace':{},'retrieved_snapshot':[]}
+    monkeypatch.setattr(nodes,'retrieve_knowledge',retrieve)
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'v2.sqlite')) as saver:
+        first=await invoke_new(build_graph(saver),monkeypatch,'这笔订单是什么，送到哪了，有没有使用说明')
+        assert first['state']['task_plan_version']==2
+        monkeypatch.setattr(settings,'multi_intent_simple_enabled',True)
+        async def forbidden(*a,**kw):raise AssertionError('旧卡片不能走新规划')
+        monkeypatch.setattr(simple_intents,'classify',forbidden)
+        out,_=await old_resume(build_graph(saver),monkeypatch,first['conversation_id'],'1001')
+        assert out['state']['task_plan_version']==2 and out['interrupt'] is None
 
 
 async def test_sse_reply_precedes_persisted_card_and_resume_continues(setup,monkeypatch,tmp_path):
