@@ -35,7 +35,7 @@ _READ_TOOLS = {
     '物流': {'query_order', 'query_logistics'},
     '商品咨询': {'query_order', 'query_product', 'query_faq'},
     '售后': {'query_order', 'query_warranty', 'query_return_status', 'query_faq'},
-    '退款退货': {'query_order', 'query_return_status', 'query_warranty', 'query_faq'},
+    '退款退货': {'query_order', 'query_logistics', 'query_return_status', 'query_warranty', 'query_faq'},
     '人工': {'query_order'},
     '投诉': {'query_order'},
 }
@@ -134,6 +134,7 @@ def instruction(state):
             '沿用正常Markdown客服回复。只回答query明确询问的内容，工具返回的其他字段也不要顺便展示。'
             '禁止询问是否继续查询其他事项，禁止“还有其他需要帮助的吗”“如需帮助随时联系”等泛化邀约。'
             '以本项事实或限制结束；只有本项确实缺必要信息或需要操作确认时才提问。'
+            '支付、配送和售后状态分别依据对应回执；“已付款”不能推断为“未发货”，缺少字段不要补全。'
             '不输出任务队列、优先级、待办或下一项等内部安排，不复述已完成事项。'
             'action=consult只咨询，不能提交或准备提交操作；选定订单不等于授权办理。'
             '如需用户确认，沿用现有工具和表单；已明确的工单描述无需重复口头确认，调用工具会展示原确认卡片。\n'

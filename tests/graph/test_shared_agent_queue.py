@@ -328,3 +328,16 @@ async def test_logistics_cannot_call_sibling_warranty_even_if_model_forges_call(
         assert '"reply_phase": "final"' in last and '"completed_intents": ["物流"]' in last
         assert all('query_warranty' not in b for b in model.bound[:4])
         assert 'query_warranty' in model.bound[-1]
+
+
+async def test_refund_keeps_logistics_as_a_prerequisite_without_replacing_form(setup,monkeypatch,tmp_path):
+    model=configure(monkeypatch,setup,[{'intent':'退款退货','query':'订单1001申请退款','order_id':'1001','action':'request'}],
+        [call('query_order',{'order_id':'1001'},'o'),call('query_logistics',{'tracking_no':'SF213502378238'},'l'),
+         call('submit_refund',{'order_id':'1001','reason':'质量问题'},'r'),AIMessage('请在退款表单确认。')])
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'refund-read.sqlite')) as saver:
+        out=await start(saver,monkeypatch,'订单1001申请退款')
+        assert out['interrupt']['type']=='task_form'
+        assert 'query_logistics' in model.bound[0]
+        assert any(isinstance(m,ToolMessage) and m.name=='query_logistics' and m.status=='success' for m in out['state']['messages'])
+        out=await resume(out,{'confirmed':False})
+        assert out['interrupt'] is None and not await tickets()
