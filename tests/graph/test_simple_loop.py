@@ -164,6 +164,15 @@ def test_ambiguous_single_referent_not_one_selector_per_guessed_candidate():
     assert all(t['order_id'] is None for t in tasks)
 
 
+def test_control_copy_never_confuses_order_selection_and_submission():
+    t={'kind':'refund','order_id':'1001','status':'blocked','step':'confirm_submission'}
+    text=simple_loop.control_reply(t)
+    assert '确认或取消' in text and '选择' not in text and '尚未提交' in text
+    t.update(status='done',receipt={'ticket_no':'T123'})
+    text=simple_loop.control_reply(t)
+    assert '已提交' in text and '确认' not in text
+
+
 async def test_chat_409_keeps_card_and_watermark(setup,monkeypatch,tmp_path):
     import httpx
     from fastapi import FastAPI
@@ -206,3 +215,17 @@ async def test_v1_card_still_resumes_when_simple_enabled(wired,monkeypatch,tmp_p
         monkeypatch.setattr(simple_intents,'classify',forbidden)
         out,_=await old_resume(graph,monkeypatch,first['conversation_id'],'1001')
         assert out['state']['task_plan_version']==1 and out['interrupt'] is None
+
+
+async def test_sse_reply_precedes_persisted_card_and_resume_continues(setup,monkeypatch,tmp_path):
+    classify(monkeypatch,setup,[{'kind':'refund','order_ref':'s'},{'kind':'complaint','order_ref':'s'}])
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'sse.sqlite')) as saver:
+        monkeypatch.setattr(runtime,'_graph',build_graph(saver))
+        events=[ev async for ev in runtime.stream_turn('alice','商品漏电了，我要申请退款并登记投诉',None,multi_intent_enabled=True)]
+        card=next(ev for ev in events if ev['type']=='interrupt')
+        assert card['kind']=='select_order'
+        assert next(i for i,e in enumerate(events) if e['type']=='task_event')<events.index(card)
+        assert len([e for e in events if e['type']=='task_event' and '停止使用' in e.get('text','')])==1
+        follow=[ev async for ev in runtime.stream_resume(card['conversation_id'],'1001',user_id='alice',interrupt_id=card['interrupt_id'])]
+        assert any(e['type']=='interrupt' and e['kind']=='task_actions' for e in follow)
+        assert not any(e['type']=='task_event' and '停止使用' in e.get('text','') for e in follow)
