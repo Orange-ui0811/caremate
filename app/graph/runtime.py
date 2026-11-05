@@ -378,7 +378,7 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
                 if node=='queue_take' and upd.get('active_task'):
                     actions=[]
                     yield {'type':'task_start'}
-                if node=='queue_complete' and any(t.get('status')=='blocked' for t in upd.get('task_plan',{}).values()):
+                if node=='queue_complete' and (queue_contract.writing(stream_state) or any(t.get('status')=='blocked' for t in upd.get('task_plan',{}).values())):
                     actions=[]  # The original form is attached to the durable interrupt.
                 for event in upd.get("task_events", []):
                     if not event.get('internal'):

@@ -67,6 +67,17 @@ async def test_receipt_absence_gets_one_original_agent_retry_not_done(corrected,
         assert t['result']['completion_basis']=='missing_order_receipt'
 
 
+async def test_empty_repair_keeps_original_agent_failure_explanation(corrected,monkeypatch,tmp_path):
+    model(monkeypatch,corrected,[task('订单1001物流','物流','1001')],
+        [AIMessage('物流服务暂时不可用，无法核实当前位置。'),AIMessage('')])
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'empty-repair.sqlite')) as saver:
+        out=await start(saver,monkeypatch,'订单1001物流')
+        assert out['state']['task_plan']['0']['status']=='failed'
+        assert out['state']['answer']=='物流服务暂时不可用，无法核实当前位置。'
+        history=await repository.list_dialog_messages(out['conversation_id'])
+        assert history[-1].content==out['state']['answer']
+
+
 async def test_fake_complaint_completion_retries_original_confirm_and_survives_restart(corrected,monkeypatch,tmp_path):
     model(monkeypatch,corrected,[task('登记商家推诿的投诉工单','人工',action='request')],
         [AIMessage('投诉已登记。'),call('create_ticket',{'ticket_type':'投诉','description':'商家推诿，请处理'},'c'),AIMessage('已登记。')])
@@ -98,6 +109,20 @@ async def test_stream_suppresses_unconfirmed_write_claims_and_history_matches(co
         cid=next(e['conversation_id'] for e in events if 'conversation_id' in e)
         history=''.join(x.content or '' for x in await repository.list_dialog_messages(cid) if x.role=='assistant')
         assert text==history and not await tickets()
+
+
+async def test_completed_complaint_clears_old_form_in_stream_and_state(corrected,monkeypatch,tmp_path):
+    model(monkeypatch,corrected,[task('登记商家推诿的投诉工单','投诉',action='request')],
+        [call('create_ticket',{'ticket_type':'投诉','description':'商家推诿，请处理'},'c'),AIMessage('已登记。')])
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'stale-action.sqlite')) as saver:
+        out=await start(saver,monkeypatch,'登记商家推诿的投诉工单')
+        assert out['interrupt']['type']=='confirm_ticket' and not await tickets()
+        events=[e async for e in runtime.stream_resume(out['conversation_id'],{'confirmed':True},
+            user_id='alice',interrupt_id=out['interrupt']['interrupt_id'])]
+        assert len(await tickets())==1
+        assert not any(e['type']=='actions' for e in events)
+        snapshot=await runtime.get_graph().aget_state({'configurable':{'thread_id':str(out['conversation_id'])}})
+        assert snapshot.values['suggested_actions']==[]
 
 
 async def test_bad_action_is_repaired_before_any_business_work(corrected,monkeypatch,tmp_path):

@@ -217,7 +217,13 @@ async def review(state):
 async def complete(state):
     from app.graph import nodes
     tasks=copy.deepcopy(state['task_plan']);t=tasks[state['active_task']]
-    raw=nodes.resolve_answer(state);status,basis,proof=evidence(state)
+    raw=nodes.resolve_answer(state)
+    if not raw:
+        # A bounded repair may finish with an empty model message. Retain the
+        # original Agent's explanation from this task; never borrow a sibling.
+        raw=next((m.content for m in reversed(state.get('messages',[])[state.get('queue_start',0):])
+                  if isinstance(m,AIMessage) and isinstance(m.content,str) and m.content and not m.tool_calls),'')
+    status,basis,proof=evidence(state)
     t.update(status=status,result={'raw_answer':raw,'completion_basis':basis,'evidence':proof,
         'tool_receipts':[m.model_dump(mode='json') for m in state.get('messages',[])[state.get('queue_start',0):] if isinstance(m,ToolMessage)]})
     answer=raw
@@ -251,6 +257,7 @@ async def complete(state):
         replacements.append(AIMessage(answer,id=t['task_id']+':public'))
     await workflow.save_plan(state['conversation_id'],state['user_id'],state['plan_id'],state['current_message_id'],tasks)
     return {'task_plan':tasks,'queue_orders':shared,'answer':answer,'messages':replacements,
+        'suggested_actions':[] if writing(state) else state.get('suggested_actions',[]),
         'queue_answer':'\n\n'.join(filter(None,[state.get('queue_answer'),answer]))}
 
 
