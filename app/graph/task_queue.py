@@ -70,6 +70,8 @@ def tool_denial(state, call):
 
 
 async def classify(state):
+    from app.graph import queue_contract
+    if queue_contract.enabled(state):return await queue_contract.classify(state)
     tasks=copy.deepcopy(state.get('task_plan',{}))
     try:
         if state.get('memory_error'):raise ValueError(state['memory_error'])
@@ -103,7 +105,13 @@ async def classify(state):
 async def take(state):
     tasks=copy.deepcopy(state['task_plan'])
     pending=[k for k,t in tasks.items() if t.get('status')=='pending']
-    if not pending:return {'active_task':'','task_events':[]}
+    if not pending:
+        if state.get('queue_contract_version') and state.get('planning_error'):
+            event=await workflow.event(state['conversation_id'],state['user_id'],state['plan_id']+':planning-incomplete',
+                '部分诉求暂未能准确理解，因此尚未处理；请明确对应订单和需要查询或办理的事项。')
+            return {'active_task':'','task_events':[event],
+                'queue_answer':'\n\n'.join(filter(None,[state.get('queue_answer'),event['text']]))}
+        return {'active_task':'','task_events':[]}
     key=min(pending,key=lambda k:priority(tasks[k]));t=tasks[key]
     shared=state.get('queue_orders',{}).get(t.get('order_ref'),{})
     oid=t.get('order_id') or shared.get('order_id')
@@ -114,13 +122,16 @@ async def take(state):
     if oid and oid not in query:query=f'订单{oid}：{query}'
     if t['intent']=='商品咨询' and order.get('product') and order['product'] not in query:
         query=order['product']+' '+query
-    await workflow.save_plan(state['conversation_id'],state['user_id'],state['plan_id'],state['current_message_id'],tasks)
-    return {'task_plan':tasks,'active_task':key,'intent':t['intent'],'route':INTENT_TO_ROUTE[t['intent']],
+    update = {'task_plan':tasks,'active_task':key,'intent':t['intent'],'route':INTENT_TO_ROUTE[t['intent']],
             'resolved_query':query,'order_id':oid or '', 'order_data':order,
             'queue_start':len(state.get('messages',[])), 'steps':0, 'answer':'',
             'suggested_actions':[], 'evidence':'','citations':[],'evidence_strong':False,
             'fallback_source':'','retrieved_snapshot':[],'fresh_business_evidence':{},'task_events':[],
             'trace':{'queue_current':t['task_id']}}
+    from app.graph import queue_contract
+    if queue_contract.enabled(state):update=queue_contract.prepare_take(state,update)
+    await workflow.save_plan(state['conversation_id'],state['user_id'],state['plan_id'],state['current_message_id'],update['task_plan'])
+    return update
 
 
 def instruction(state):
@@ -140,6 +151,8 @@ def instruction(state):
             '如需用户确认，沿用现有工具和表单；已明确的工单描述无需重复口头确认，调用工具会展示原确认卡片。\n'
             'order_id非空表示当前对象已在服务端确认，不再向用户询问订单。submitted_forms只证明其中task_intent对应的事项，'
             '不能把退款工单当成投诉工单；本项建单必须调用create_ticket并经原确认卡取得本项回执，不能复用其他事项的工单号。\n'
+            + ('本项订单已确定；原话中的忘记订单/让我选单描述的是之前状态，选单步骤现已完成。不要再口头问是不是这单；提交仍由原确认卡授权。\n'
+               if state.get('queue_contract_version') and state.get('order_id') else '')
             +json.dumps({'query':state.get('resolved_query') or t['query'],'intent':t['intent'],'order_id':state.get('order_id'),
                         'action':t['action'],'submitted_forms':[{'task_intent':x['intent'],
                             'order_id':x.get('order_id'),'form_type':x.get('form',{}).get('type'),
@@ -169,6 +182,8 @@ def cached_read(state,call,spec):
 
 
 async def complete(state):
+    from app.graph import queue_contract
+    if queue_contract.enabled(state):return await queue_contract.complete(state)
     tasks=copy.deepcopy(state['task_plan']);t=tasks[state['active_task']]
     answer=nodes.resolve_answer(state)
     recent=state.get('messages',[])[state['queue_start']:]
@@ -199,6 +214,8 @@ async def complete(state):
 
 
 def after_complete(state):
+    from app.graph import queue_contract
+    if queue_contract.enabled(state):return 'log'
     return 'form' if current(state).get('status')=='blocked' else 'next'
 
 
@@ -213,4 +230,6 @@ async def wait_form(state):
     task['status']='done' if receipt and receipt.get('ticket_no') else 'cancelled'
     task['result']['form_receipt']=receipt
     await workflow.save_plan(state['conversation_id'],state['user_id'],state['plan_id'],state['current_message_id'],tasks)
-    return {'task_plan':tasks,'suggested_actions':[]}
+    update={'task_plan':tasks,'suggested_actions':[]}
+    from app.graph import queue_contract
+    return await queue_contract.form_resumed(state,update) if queue_contract.enabled(state) else update

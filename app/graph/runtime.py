@@ -158,6 +158,7 @@ def _graph_input(user_id: str, message: str, cid: int, msg_id: int,
             'task_plan_version':1,'planning_context':{},'planning_error':'','planning_proposals':[],'task_context':{},
             'simple_facts':{},'simple_presented':{},'simple_citations':[],'simple_decision':{},'simple_execution':False,
             'queue_orders':{},'queue_start':0,'queue_answer':'',
+            'queue_contract_version':0,'queue_review_retry':False,'queue_public_events':[],
             'subflow_results': {},
             'subflow_presented': {}, 'subflow_reply_id':'', 'subflow_presentation':False,
             "trace": None}  # merge 通道:None=重置哨兵(见 merge_dict),清上一轮 trace 残留
@@ -337,12 +338,16 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
     actions: list = []
     recovery_sent = False
     pending_interrupt = None
+    from app.graph import queue_contract
+    initial = await get_graph().aget_state(config)
+    stream_state = dict(initial.values or {})
     async for mode, chunk in get_graph().astream(
         stream_source, config, stream_mode=["messages", "updates"],
     ):
         if mode == "messages":
             msg, meta = chunk
             if meta.get("langgraph_node") in ANSWER_NODES:
+                if queue_contract.writing(stream_state):continue
                 text = msg.content if isinstance(msg.content, str) else ""
                 if text:
                     if text == context_runtime.RECOVERY_REPLY:
@@ -369,6 +374,7 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
             for node, upd in chunk.items():
                 if not isinstance(upd, dict):
                     continue
+                stream_state.update(upd)
                 if node=='queue_take' and upd.get('active_task'):
                     actions=[]
                     yield {'type':'task_start'}

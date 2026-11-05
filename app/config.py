@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     multi_intent_shared_agent_enabled: bool = False  # v4 queue over the original graph nodes.
+    multi_intent_completion_enabled: bool = False  # New v4 plans only; pending plans retain their contract.
     multi_intent_simple_enabled: bool = False  # New v3 plans; existing checkpoints retain their executor.
     multi_intent_subflows_enabled: bool = False  # Isolated P2 opt-in, leaves original workflow available.
     multi_intent_context_v2_enabled: bool = False  # New turns only; old checkpoints keep their version.

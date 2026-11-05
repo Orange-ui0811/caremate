@@ -3,6 +3,7 @@ from langgraph.graph import END, START, StateGraph
 from app.graph import nodes
 from app.graph import tasks
 from app.graph import task_queue
+from app.graph import queue_contract
 from app.graph.business_evidence import prepare_business_evidence
 from app.graph.routing import confidence_gate, route_by_intent, should_continue
 from app.graph.state import ConversationState
@@ -29,12 +30,16 @@ def _builder(*, subflows=False) -> StateGraph:
     b.add_node('queue_take',task_queue.take)
     b.add_node('queue_complete',task_queue.complete)
     b.add_node('queue_form_wait',task_queue.wait_form)
+    b.add_node('queue_bind_order',queue_contract.bind_order)
+    b.add_node('queue_review',queue_contract.review)
+    b.add_conditional_edges('queue_review',lambda s:'retry' if s.get('queue_review_retry') else ('complete' if queue_contract.enabled(s) else 'legacy'),
+        {'retry':'main_agent','complete':'queue_complete','legacy':'log'})
     b.add_conditional_edges('classify_tasks',lambda s:'failed' if s.get('task_planning_error') else 'ready',
                             {'failed':'script_reply','ready':'queue_take'})
-    b.add_conditional_edges('queue_take',lambda s:route_by_intent(s) if s.get('active_task') else 'end',
+    b.add_conditional_edges('queue_take',queue_contract.dispatch,
         {'end':END,'escalate':'complaint_reply','fallback_script':'script_reply','knowledge':'retrieve_knowledge',
          'refund_flow':'fetch_order','business':'prepare_business_evidence'})
-    b.add_conditional_edges('queue_complete',task_queue.after_complete,{'form':'queue_form_wait','next':'queue_take'})
+    b.add_conditional_edges('queue_complete',task_queue.after_complete,{'form':'queue_form_wait','next':'queue_take','log':'log'})
     b.add_edge('queue_form_wait','queue_take')
     if subflows:
         from app.graph import subflow_tasks
@@ -82,7 +87,10 @@ def _builder(*, subflows=False) -> StateGraph:
     })
     b.add_edge("prepare_business_evidence", "main_agent")
     # 退款子流程确定性链:取单 → 检索政策 → 交主力 Agent 判能不能退
-    b.add_edge("fetch_order", "retrieve_policy")
+    b.add_conditional_edges('fetch_order',lambda s:'bind' if queue_contract.enabled(s) else 'policy',
+        {'bind':'queue_bind_order','policy':'retrieve_policy'})
+    b.add_conditional_edges('queue_bind_order',lambda s:'policy' if s.get('route')=='refund_flow' else 'business',
+        {'policy':'retrieve_policy','business':'prepare_business_evidence'})
     b.add_edge("retrieve_policy", "main_agent")
     # 知识路:检索 → 生成前证据闸
     b.add_edge("retrieve_knowledge", "confidence_check")
@@ -93,15 +101,16 @@ def _builder(*, subflows=False) -> StateGraph:
     # 主力 Agent ReAct 环
     b.add_conditional_edges("main_agent", should_continue, {
         "continue": "agent_tools",
-        "stop": "log",
+        "stop": "queue_review",
     })
     b.add_edge("agent_tools", "main_agent")
     # 确定性出口 → 日志 → END
-    b.add_edge("complaint_reply", "log")
-    b.add_edge("script_reply", "log")
-    b.add_edge("fallback_reply", "log")
-    b.add_conditional_edges('log',lambda s:'next' if task_queue.current(s) else 'end',
-                            {'next':'queue_complete','end':END})
+    for name in ('complaint_reply','script_reply','fallback_reply'):
+        b.add_conditional_edges(name,lambda s:'review' if queue_contract.enabled(s) and task_queue.current(s) else 'log',
+            {'review':'queue_review','log':'log'})
+    b.add_conditional_edges('log',lambda s:('form' if task_queue.current(s).get('status')=='blocked' else 'take')
+                            if queue_contract.enabled(s) and task_queue.current(s) else ('next' if task_queue.current(s) else 'end'),
+                            {'next':'queue_complete','end':END,'form':'queue_form_wait','take':'queue_take'})
     return b
 
 

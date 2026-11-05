@@ -25,7 +25,7 @@ class TaskIntents(BaseModel):
 
 
 @model_call("intent_classification")
-async def classify_tasks(raw: str, query: str, history: str, candidates: list) -> list[dict]:
+async def classify_tasks(raw: str, query: str, history: str, candidates: list, *, feedback=None) -> list[dict]:
     """Same nine labels and model as classify(); only the output is a task list."""
     import json
     from app.core.prompts import INTENT_CLASSIFY_SYSTEM
@@ -44,10 +44,15 @@ order_id只能来自提供的可信候选。明确指定优先；两笔订单指
 独立退款、另一笔订单不能借旁边物流任务的订单，使用不同order_ref。
 咨询不升级为办理，无法确定时action=consult。商品咨询query保留已知商品名，不推断型号。
 合并同一对象同一意图的诉求，不重复创建相同任务。
+“给这单办退钱”“提交退款申请，等平台审核”是request，不是查询申请方法或审核进度。
+只有询问“是否可以退/如何申请/进度如何”才是consult。query不得改变原话中的办理动词或时态。
+人工客服在线时间、服务规则属于商品咨询，需要知识检索，不是人工建单。
+source必须是original内连续原文，不能复制resolved中的改写。两笔订单分别建任务，使用不同引用。
 '''
     result=await llm.structured(TaskIntents,model=settings.intent_model or None).ainvoke([
         {"role":"system","content":prompt},
-        {"role":"user","content":json.dumps({'original':raw,'resolved':query,'history':history,'candidates':candidates},ensure_ascii=False)}])
+        {"role":"user","content":json.dumps({'original':raw,'resolved':query,'history':history,'candidates':candidates,
+            **({'correction':feedback} if feedback else {})},ensure_ascii=False)}])
     return [t.model_dump() for t in result.tasks]
 
 INTENTS = ("物流", "订单", "商品咨询", "退款退货", "售后", "投诉", "人工", "闲聊", "其他")

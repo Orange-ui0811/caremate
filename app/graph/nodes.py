@@ -111,7 +111,11 @@ async def fetch_order(state) -> dict:
     oid = state.get("order_id") or _extract_order_id(_effective_query(state))
     while not business.owns_order(uid, str(oid or "")):
         orders = business.list_user_orders(uid)                        # 只读,可安全重跑
-        oid = interrupt({"type": "select_order", "orders": orders})    # resume 回填订单号
+        from app.graph import queue_contract
+        extra = ({'task_kind': {'物流':'logistics','订单':'order'}.get(state.get('intent'),'refund'),
+                  'selection_prompt':'请选择本项需要处理的订单，同一订单的后续事项会继续办理。'}
+                 if queue_contract.enabled(state) else {})
+        oid = interrupt({"type": "select_order", "orders": orders, **extra})
     data = business.order_snapshot(oid)
     return {"order_id": oid, "order_data": data,
             "trace": {"fetch_order": {"order_id": oid}}}
@@ -154,6 +158,8 @@ async def script_reply(state) -> dict:
     if state.get("memory_error"):
         return {"answer": context_runtime.RECOVERY_REPLY,
                 "trace": {"context_recovery": state["memory_error"]}}
+    if state.get('trace',{}).get('intent_status') == 'invalid_plan':
+        return {'answer':'暂时未能准确理解本次要处理的事项，请明确每笔订单需要查询还是办理。','trace':{'route':'planning_invalid'}}
     if state.get("trace", {}).get("intent_status") == "unavailable":
         return {"answer": "抱歉，模型服务暂时不可用，请稍后重试，或联系人工客服。",
                 "trace": {"route": "fallback_script", "service_error": "intent_unavailable"}}
@@ -599,7 +605,8 @@ async def agent_tools(state) -> dict:
                             "draft": {"order_id": tc["args"].get("order_id", ""),
                                       "reason": tc["args"].get("reason")}})
             tool_msgs.append(ToolMessage(
-                content="已把『提交退款工单』选项交给用户确认。请用一句话说明这一单可以退款并停止,不要再调用任何工具。",
+                content=("退款申请尚未提交，原确认表单已准备。等待用户确认；不得声称已提交、审核通过或已退款。停止调用工具。"
+                         if state.get('queue_contract_version') else "已把『提交退款工单』选项交给用户确认。请用一句话说明这一单可以退款并停止,不要再调用任何工具。"),
                 tool_call_id=tc["id"], name="submit_refund"))
         elif tc["name"] == "create_ticket" and decision is not None:
             if tc is ticket_calls[0]:
@@ -651,6 +658,9 @@ def resolve_answer(state) -> str:
 
 async def log_node(state) -> dict:
     """统一保存最终答复,并补齐固定出口在图历史中缺失的助手消息。"""
+    from app.graph import queue_contract
+    if queue_contract.enabled(state) and queue_contract.active(state):
+        return await queue_contract.publish(state)
     logger.info(
         "turn conv=%s intent=%s route=%s resolved=%r trace=%s",
         state.get("conversation_id"), state.get("intent"), state.get("route"),

@@ -98,6 +98,8 @@ async def event(cid, uid, key, text, *, task_id="", actions=None, citations=None
             await session.commit()
             return payload
         msg = Message(conversation_id=cid, role="assistant", content=text)
+        if citations:
+            msg.activities=[{'kind':'citations','items':citations}]
         session.add(msg)
         await session.flush()
         payload = {"event_id": key, "message_id": msg.id, "sequence": msg.id,

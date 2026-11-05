@@ -896,9 +896,11 @@
       const resp = await doFetch();
       await readSSEStream(resp, {
         task_start: () => {
-          if (textStarted) {
-            if (citations.length) decorateCitations(textEl,citations);
-            addFeedbackBar(bubble);bubble=addRow('bot');
+          if (textStarted || eventBubble) {
+            if (textStarted && citations.length) decorateCitations(textEl,citations);
+            if (textStarted) addFeedbackBar(bubble);
+            else if (bubble.parentElement) bubble.parentElement.remove();
+            bubble=addRow('bot');eventBubble=null;
             structured=false;textStarted=false;raw='';badgesEl=null;textEl=null;citations=[];actions=[];
           }
         },
@@ -943,7 +945,7 @@
         return;
       }
       retireWorkflowControls();
-      if (!textStarted && structured && !textEl) { bubble.parentElement.remove(); return; }
+      if (!textStarted && (eventBubble || structured && !textEl)) { bubble.parentElement.remove(); return; }
       if (!textStarted) { ensureStructure(); textEl.innerHTML = ""; textEl.textContent = "(无回复)"; }
       if (textStarted && citations.length) decorateCitations(textEl, citations);
       if (actions.length) renderActions(bubble, actions);
