@@ -22,9 +22,9 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def norm(s):return ''.join(s.split())
 
 
-def ticket_sequence_namespace(arm,case_index,rep):
-    if arm not in ARMS or not 0<=case_index<120 or rep not in (1,2,3):raise ValueError('Invalid trajectory')
-    return (((rep-1)*2+ARMS.index(arm))*120+case_index+1)*1000
+def ticket_sequence_namespace(arm,case_index,rep,case_count=120):
+    if arm not in ARMS or not 0<=case_index<case_count or rep not in (1,2,3):raise ValueError('Invalid trajectory')
+    return (((rep-1)*2+ARMS.index(arm))*case_count+case_index+1)*1000
 
 
 SCORING={
@@ -145,7 +145,7 @@ async def worker(arm,case_id,rep,pilot=False):
     settings.model_pool_db_path=protocol.get('model_pool_db_path',str(ROOT/'data/model_pool.sqlite3'));settings.langfuse_public_key=''
     for k,v in protocol.get('evaluation_settings',{}).items():setattr(settings,k,v)
     if protocol.get('candidate_shared_agent'):
-        settings.multi_intent_shared_agent_enabled=True
+        if arm=='enabled':settings.multi_intent_shared_agent_enabled=True
         from app.core import runtime_settings
         runtime_settings.SETTINGS_PATH=OUT/'runtime_settings.json'
     directory=OUT/('pilot' if pilot else 'runs')/f'r{rep}'/arm/case_id
@@ -156,7 +156,7 @@ async def worker(arm,case_id,rep,pilot=False):
     base.async_session=async_sessionmaker(base.engine,expire_on_commit=False)
     uid=f'mi120formal-{rep}-{arm}-{case_id}'
     case_index=next(i for i,c in enumerate(read(OUT/'cases.json')) if c['id']==case_id)
-    repository._TICKET_SEQ=ticket_sequence_namespace(arm,case_index,rep)
+    repository._TICKET_SEQ=ticket_sequence_namespace(arm,case_index,rep,len(read(OUT/'cases.json')))
     business.order_snapshot=lambda oid:dict(case['orders'][oid])
     business.list_user_orders=lambda who:[dict(o) for o in case['orders'].values()] if who==uid else []
     registry.scan_builtin()
