@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from app.graph import runtime
 
@@ -93,6 +94,9 @@ async def test_stream_turn_maps_events(monkeypatch, no_summary_task):
     from langchain_core.messages import AIMessage, ToolMessage
 
     class FakeGraph:
+        async def aget_state(self, config):
+            return SimpleNamespace(values={})
+
         async def astream(self, inp, config, stream_mode=None):
             # messages 模式:main_agent 的 token
             yield ("messages", (AIMessage("已"), {"langgraph_node": "main_agent"}))
@@ -141,6 +145,9 @@ async def test_stream_turn_dedups_actions_before_emitting(monkeypatch, no_summar
     monkeypatch.setattr(runtime.repository, "append_message", fake_append)
 
     class FakeGraph:
+        async def aget_state(self, config):
+            return SimpleNamespace(values={})
+
         async def astream(self, inp, config, stream_mode=None):
             # agent 在多个 ReAct 轮次重复提议 create_ticket
             yield ("updates", {"main_agent": {
@@ -168,6 +175,9 @@ async def test_stream_turn_emits_interrupt_event(monkeypatch, no_summary_task):
         def __init__(self, value): self.value = value
 
     class FakeGraph:
+        async def aget_state(self, config):
+            return SimpleNamespace(values={})
+
         async def astream(self, inp, config, stream_mode=None):
             yield ("updates", {"fetch_order": None})
             yield ("updates", {"__interrupt__": (Intr(

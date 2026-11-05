@@ -39,6 +39,7 @@ async def test_nc13_selection_is_shared_and_logistics_finishes_before_refund(cor
     async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'one.sqlite')) as saver:
         out=await start(saver,monkeypatch,'忘记订单，申请退款，查同一单物流')
         assert out['interrupt']['type']=='select_order' and out['interrupt']['task_kind']=='logistics'
+        assert out['state']['planning_error'] == ''
         assert out['state']['task_plan']['1']['status']=='blocked' and not m.seen
         with pytest.raises(runtime.ResumeRejected):await resume(out,'9999')
         out=await resume(out,'1001')
@@ -51,6 +52,7 @@ async def test_nc13_selection_is_shared_and_logistics_finishes_before_refund(cor
         out=await resume(out,{'confirmed':False})
         assert out['state']['task_plan']['0']['status']=='cancelled'
         assert out['interrupt'] is None and len(corrected)==1
+        assert '部分诉求暂未能准确理解' not in out['state']['answer']
         history=' '.join(x.content or '' for x in await repository.list_dialog_messages(out['conversation_id']))
         assert '钱到账' not in history and '已取消' in history
 
@@ -136,6 +138,19 @@ def test_negation_and_foreign_order_are_not_authorization(monkeypatch):
     assert not valid and errors
     valid,errors=queue_contract.validate_proposals([task(state['task_origin'],'订单','9999')],state,{'1001'})
     assert not valid and errors
+
+
+@pytest.mark.parametrize('source,accepted',[
+    ('订单1001和2002都因质量问题提交退款申请，分别等平台审核',True),
+    ('别给订单1001申请退款',False),
+    ('千万别再给订单1001申请退款',False),
+])
+def test_separate_applications_are_not_mistaken_for_negation(monkeypatch,source,accepted):
+    monkeypatch.setattr(queue_contract.business,'owns_order',lambda u,o:o in {'1001','2002'})
+    valid,errors=queue_contract.validate_proposals(
+        [task(source,'退款退货','1001',action='request')],
+        {'task_origin':source,'user_id':'alice'},{'1001','2002'})
+    assert bool(valid) is accepted and bool(errors) is not accepted
 
 
 @pytest.mark.parametrize('confirmed',[True,False])

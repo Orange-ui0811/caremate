@@ -61,7 +61,9 @@ def validate_proposals(proposals, state, candidates):
                 raise ValueError('order_id:本项明确订单已在可信候选中，不应再次选单')
             # Detect contradictions only; never grant request authority by regex.
             source = span
-            negated = re.search(r'不要|不用|不需要|别|如果|假设|他说|她说|[“”"]', source)
+            # “分别办理” is not a negation. Match the imperative “别” before
+            # an action, rather than rejecting every word containing it.
+            negated = re.search(r'不要|不用|不需要|别(?=再|给|替|帮|为|去|办|申|提|登|退|投|创|建)|如果|假设|他说|她说|[“”"]', source)
             request = not negated and re.search(r'提交.{0,8}退款申请|申请退款|办.{0,8}(?:退款|退钱)|登记.{0,15}(?:投诉|工单)', source)
             if request and t['action'] != 'request':
                 raise ValueError('action:原话明确要求办理，不能改为咨询')
@@ -122,7 +124,7 @@ async def classify(state):
             'kind':'planning','queue_contract_version':1,'result':{'completion_basis':'planning_invalid','error':e}}
     await workflow.save_plan(state['conversation_id'],state['user_id'],state['plan_id'],state['current_message_id'],tasks)
     return {'task_plan':tasks,'planning_context':context,'planning_proposals':attempts,
-        'planning_error':json.dumps(unresolved,ensure_ascii=False),'task_planning_error':not bool(valid),
+        'planning_error':json.dumps(unresolved,ensure_ascii=False) if unresolved else '', 'task_planning_error':not bool(valid),
         'intent':'其他','route':'fallback_script','queue_orders':{},'queue_answer':'','active_task':'',
         'task_events':[],'trace':{'planning_attempts':attempts,'intent_status':'invalid_plan' if not valid else 'ready'}}
 
