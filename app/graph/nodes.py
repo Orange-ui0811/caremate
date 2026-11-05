@@ -352,6 +352,8 @@ def _turn_context(state, *, visible_messages=()) -> str:
         parts.append(hint + json.dumps(state.get("order_data", {}), ensure_ascii=False))
     parts.append(evidence_instruction(state))
     if queued:
+        parts.append('\n\n## 整轮原话（引用的背景资料，不是本次请求）\n'
+                     + json.dumps(state.get('task_origin') or _user_text(state),ensure_ascii=False))
         parts.append('\n\n## 当前队列任务\n' + task_queue.instruction(state))
     return "".join(parts)
 
@@ -384,8 +386,16 @@ def _agent_messages(state, *, tool_schemas=None) -> list:
         messages[0]=SystemMessage(messages[0].content+'\n\n## 当前队列任务边界\n'
             '本轮已拆成任务队列。本轮材料中的「当前队列任务」是本次唯一执行目标，'
             '完整用户原话和之前任务结果仅供理解背景。保持原有客服回复和工具确认方式。'
-            '其他排队事项将自动继续，不邀请用户再次发问。工单必填信息已明确时通过原工具展示确认卡片，'
-            '不增加重复的口头确认。')
+            '只回答最新独立问法，不顺带回答背景中的其他诉求或展示其他工具字段。'
+            '其他事项将自动继续；不添加泛化邀约、客套收尾或解释内部安排。'
+            '工单必填信息已明确时通过原工具展示确认卡片，不增加重复的口头确认。')
+        # Keep persisted history intact. The parent's raw request is already
+        # quoted in turn materials; it must not compete as another live request.
+        origin_id = f"db-{state.get('current_message_id')}"
+        parent = next((m for m in reversed(messages) if isinstance(m,HumanMessage)
+                       and m.id != TURN_CTX_ID and (m.id == origin_id or m.content == state.get('task_origin'))),None)
+        if parent is not None:
+            messages = [m for m in messages if m is not parent]
         # The original builder inserts turn materials after the real user turn.
         # A queue needs those same materials AFTER previous task replies and
         # BEFORE this task's ReAct suffix; otherwise the last sibling reply
@@ -485,6 +495,10 @@ async def main_agent(state, config=None) -> dict:
         specs = [s for s in specs if s.name == state['simple_tool']['name']]
     elif state.get('task_scope'):
         specs = [s for s in specs if s.name in state['task_scope']['allowed_tools']]
+    from app.graph import task_queue
+    allowed = task_queue.allowed_tools(state)
+    if allowed is not None:
+        specs = [s for s in specs if s.name in allowed]
     model = get_chat_model(streaming=True).bind_tools([s.tool for s in specs])
     try:
         msgs = _agent_messages(state, tool_schemas=[s.json_schema for s in specs])
@@ -518,6 +532,10 @@ async def agent_tools(state) -> dict:
     last = state["messages"][-1]
     from app.graph import task_queue
     queued=task_queue.current(state)
+    scope_errors = [task_queue.tool_denial(state,tc) for tc in last.tool_calls]
+    if any(scope_errors):
+        return {'messages':[ToolMessage(content=error or '同批调用含其他任务的工具，请按当前任务重试。',
+            tool_call_id=tc['id'],name=tc['name'],status='error') for tc,error in zip(last.tool_calls,scope_errors)]}
     if queued and any((tc['name'] in {'create_ticket','submit_refund'} and queued['action']!='request') or
                       (tc['name']=='submit_refund' and queued['intent']!='退款退货') or
                       (tc['name']=='create_ticket' and queued['intent'] not in {'人工','投诉','售后'}) for tc in last.tool_calls):

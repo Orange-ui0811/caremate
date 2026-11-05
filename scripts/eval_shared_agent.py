@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 from contextlib import AsyncExitStack
 from pathlib import Path
 import sys
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
 from app.config import settings
 from app.core import runtime_settings
 from app.db import base,models,repository,workflow
-from app.graph import runtime,nodes,simple_loop
+from app.graph import runtime,nodes,simple_loop,task_queue
 from app.graph.build import build_graph
 from app.kb import milvus_client
 from app.api.actions import create_refund_action,create_ticket_action
@@ -40,9 +41,24 @@ def save(path,data):path.write_text(json.dumps(data,ensure_ascii=False,indent=2,
 
 
 async def main(args):
-    folder=OUT/args.run;folder.mkdir(parents=True,exist_ok=True)
-    if not (OUT/'cases.json').exists():save(OUT/'cases.json',CASES)
-    assert json.loads((OUT/'cases.json').read_text(encoding='utf-8'))==CASES
+    output=Path(args.out) if args.out else OUT
+    folder=output/args.run;folder.mkdir(parents=True,exist_ok=True)
+    if not (output/'cases.json').exists():save(output/'cases.json',CASES)
+    assert json.loads((output/'cases.json').read_text(encoding='utf-8'))==CASES
+    # Freeze quality rules before the first model call. Raw replies remain saved
+    # for manual review; these deterministic checks do not prove all semantics.
+    invitation=r'请问还|还有其他|需要我[^。\n]{0,35}[吗？]|需要的话[^。\n]{0,15}告诉|随时[^。\n]{0,15}(?:问|咨询|联系|告诉)|已排入队列|后续任务'
+    topic_patterns={'R1':{'订单':'物流|揽件|分拨|退货|退款','物流':'退货|退款|保修'},
+        'R2':{'退款退货':'投诉'},'R3':{'退款退货':'投诉'},
+        'R6':{'物流':'保修|在保|维修','售后':'物流|揽件|分拨'},
+        'R7':{'订单':'物流|揽件|分拨|说明|手册','物流':'说明|指南|手册'},'R8':{'退款退货':'投诉'}}
+    rules={'invitation_pattern':invitation,'forbidden_sibling_topics':topic_patterns}
+    if not (output/'quality-rules.json').exists():save(output/'quality-rules.json',rules)
+    assert json.loads((output/'quality-rules.json').read_text(encoding='utf-8'))==rules
+    expected_tickets={'R1':[],'R2':['投诉','退款'],'R3':['投诉','退款'],'R4':[],
+                      'R5':[],'R6':[],'R7':[],'R8':['投诉']}
+    if not (output/'expected-tickets.json').exists():save(output/'expected-tickets.json',expected_tickets)
+    assert json.loads((output/'expected-tickets.json').read_text(encoding='utf-8'))==expected_tickets
     settings.multi_intent_shared_agent_enabled=True;settings.multi_intent_enabled=True
     settings.langfuse_public_key='';settings.model_pool_db_path=str(folder/'pool.sqlite')
     runtime_settings.SETTINGS_PATH=Path('E:/Mewhelp/data/runtime_settings.json')
@@ -63,9 +79,16 @@ async def main(args):
         'source_hashes':{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'app').rglob('*.py')}})
     capture.instrument()
     originals={name:getattr(nodes,name) for name in ['main_agent','agent_tools']}
+    original_take=task_queue.take
+    async def take(state):
+        update=await original_take(state)
+        capture.ACTIVE['current_task']=update.get('active_task')
+        return update
+    task_queue.take=take
     for name,fn in originals.items():
         async def wrapped(state,config=None,_fn=fn,_name=name):
-            capture.ACTIVE.setdefault('node_visits',[]).append({'node':_name,'task':state.get('active_task'),'order_id':state.get('order_id')})
+            capture.ACTIVE.setdefault('node_visits',[]).append({'node':_name,'task':state.get('active_task'),'order_id':state.get('order_id'),
+                'allowed_tools':sorted(task_queue.allowed_tools(state) or [])})
             return await _fn(state,config) if _name=='main_agent' else await _fn(state)
         setattr(nodes,name,wrapped)
     async def forbidden(*a,**kw):raise AssertionError('Old executor must not be entered')
@@ -86,7 +109,7 @@ async def main(args):
             async def collect(iterator):
                 card=None
                 async for ev in iterator:
-                    capture.ACTIVE['events'].append({**ev,'seconds':time.monotonic()-start})
+                    capture.ACTIVE['events'].append({**ev,'seconds':time.monotonic()-start,'task':capture.ACTIVE.get('current_task')})
                     if ev['type']=='interrupt':card=ev
                 snapshot=await runtime._graph.aget_state({'configurable':{'thread_id':str(cid)}})
                 capture.ACTIVE['steps'].append(snapshot.values)
@@ -122,9 +145,20 @@ async def main(args):
                 capture.ACTIVE['checks']={'original_agent_visited':any(v['node']=='main_agent' for v in capture.ACTIVE['node_visits']),
                     'expected_intents':set(case['intents'])<=set(t['intent'] for t in tasks),'no_extra_selection':selections<=case['max_select'],
                     'queue_terminal':card is None and all(t['status'] in {'done','cancelled','failed'} for t in tasks),
+                    'ticket_receipts':sorted(t.ticket_type for t in tickets)==expected_tickets[case['id']],
+                    'business_requests_finished':all(t['status']=='done' for t in tasks if t['intent']=='人工' and t['action']=='request'),
                     'body_deltas':sum(e['type']=='delta' for e in capture.ACTIVE['events'])>1,
                     'no_internal_summary':not any(x in text_answer for x in ['task_id','operation_id','本次事项处理结果'])}
                 capture.ACTIVE['visible_answer']=text_answer
+                quality=[]
+                for key,t in final['task_plan'].items():
+                    if not t.get('intent'):continue
+                    body=''.join(e['text'] for e in capture.ACTIVE['events'] if e['type']=='delta' and e.get('task')==key)
+                    pattern=topic_patterns.get(case['id'],{}).get(t['intent'])
+                    quality.append({'task':key,'intent':t['intent'],'body':body,
+                        'generic_invitations':re.findall(invitation,body),
+                        'sibling_topics':re.findall(pattern,body) if pattern else []})
+                capture.ACTIVE['quality']=quality
             except Exception as exc:
                 import traceback
                 capture.ACTIVE['error']=type(exc).__name__+':'+str(exc);capture.ACTIVE['traceback']=traceback.format_exc()
@@ -137,5 +171,5 @@ async def main(args):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--run',required=True);p.add_argument('--ids')
+    p=argparse.ArgumentParser();p.add_argument('--run',required=True);p.add_argument('--ids');p.add_argument('--out')
     asyncio.run(main(p.parse_args()))

@@ -107,9 +107,12 @@ async def test_real_agent_and_tools_preserve_registry_history_and_cache(setup,mo
         assert out['interrupt'] is None and len(setup)==1
         assert all(t['status']=='done' for t in out['state']['task_plan'].values())
         assert all(m[0].content.startswith(AGENT_SYSTEM+'\n\n## 当前队列任务边界') for m in model.seen)
-        assert all({'query_product','query_warranty','query_logistics','create_ticket'}<=set(x) for x in model.bound)
+        assert 'query_product' in model.bound[0] and 'query_logistics' not in model.bound[0]
+        assert 'query_logistics' in model.bound[-1] and 'query_warranty' not in model.bound[-1]
         assert any(isinstance(m,ToolMessage) and m.name=='query_order' for m in model.seen[-1])
-        assert any(isinstance(m,HumanMessage) and m.content=='订单1001是什么商品，送到哪了' for m in model.seen[-1])
+        assert not any(isinstance(m,HumanMessage) and m.content=='订单1001是什么商品，送到哪了' for m in model.seen[-1])
+        assert any('订单1001是什么商品，送到哪了' in m.content for m in model.seen[-1] if m.id==nodes.TURN_CTX_ID)
+        assert out['state']['messages'][0].content=='订单1001是什么商品，送到哪了'
         view=model.seen[-1]
         material=next(i for i,m in enumerate(view) if m.id==nodes.TURN_CTX_ID)
         first_reply=next(i for i,m in enumerate(view) if m.content=='商品是智能猫砂盆。')
@@ -161,6 +164,7 @@ async def test_original_refund_form_then_original_ticket_confirmation(setup,monk
         if confirmed:
             material=next(m.content for m in model.seen[-1] if m.id==nodes.TURN_CTX_ID)
             assert 'ticket_no' in material and 'submitted_forms' in material
+            assert '"task_intent": "退款退货"' in material and '"form_type": "refund_form"' in material
         else:
             material=next(m.content for m in model.seen[-1] if m.id==nodes.TURN_CTX_ID)
             assert '"cancelled_actions": [{"intent": "退款退货", "order_id": "1001"}]' in material
@@ -222,7 +226,7 @@ async def test_failed_tool_is_returned_to_original_agent_for_recovery(setup,monk
         [call('query_order',{'order_id':'9999'},'bad'),call('query_order',{'order_id':'1001'},'good'),AIMessage('已查到1001。')])
     async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'recovery.sqlite')) as saver:
         out=await start(saver,monkeypatch,'查询订单1001')
-        assert any(isinstance(m,ToolMessage) and 'order_not_owned' in m.content for m in out['state']['messages'])
+        assert any(isinstance(m,ToolMessage) and '订单不一致' in m.content for m in out['state']['messages'])
         assert out['state']['task_plan']['0']['order_id']=='1001'
 
 
@@ -300,3 +304,27 @@ async def test_request_without_receipt_is_not_claimed_completed(setup,monkeypatc
         task=out['state']['task_plan']['0']
         assert task['status']=='failed' and task['result']['completion_basis']=='no_confirmed_write_receipt'
         assert not await tickets()
+
+
+async def test_logistics_cannot_call_sibling_warranty_even_if_model_forges_call(setup,monkeypatch,tmp_path):
+    model=configure(monkeypatch,setup,[{'intent':'物流','query':'订单1001物流','order_id':'1001'},
+        {'intent':'售后','query':'订单1001是否在保','order_id':'1001'}],
+        [call('query_warranty',{'order_id':'1001'},'early'),call('query_order',{'order_id':'1001'},'o'),
+         call('query_logistics',{'tracking_no':'SF213502378238'},'l'),AIMessage('**物流**\n已揽件，成都。'),
+         call('query_warranty',{'order_id':'1001'},'proper'),AIMessage('**保修**\n在保。')])
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path/'scope.sqlite')) as saver:
+        out=await start(saver,monkeypatch,'订单1001送到哪了，是否在保')
+        assert out['interrupt'] is None
+        denied=next(m for m in out['state']['messages'] if isinstance(m,ToolMessage) and m.tool_call_id=='early')
+        assert denied.status=='error'
+        from sqlalchemy import select
+        from app.db.models import ToolAuditLog
+        async with workflow.base.async_session() as s:
+            names=[r.tool_name for r in (await s.execute(select(ToolAuditLog))).scalars()]
+        assert names==['query_order','query_logistics','query_warranty']
+        first=next(m.content for m in model.seen[0] if m.id==nodes.TURN_CTX_ID)
+        last=next(m.content for m in model.seen[-1] if m.id==nodes.TURN_CTX_ID)
+        assert '"reply_phase": "partial"' in first and '"remaining_task_count": 1' in first
+        assert '"reply_phase": "final"' in last and '"completed_intents": ["物流"]' in last
+        assert all('query_warranty' not in b for b in model.bound[:4])
+        assert 'query_warranty' in model.bound[-1]

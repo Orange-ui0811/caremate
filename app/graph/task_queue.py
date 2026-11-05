@@ -30,6 +30,45 @@ def priority(t):
             '人工':4, '投诉':4}.get(t['intent'],5)
 
 
+_READ_TOOLS = {
+    '订单': {'query_order', 'query_product'},
+    '物流': {'query_order', 'query_logistics'},
+    '商品咨询': {'query_order', 'query_product', 'query_faq'},
+    '售后': {'query_order', 'query_warranty', 'query_return_status', 'query_faq'},
+    '退款退货': {'query_order', 'query_return_status', 'query_warranty', 'query_faq'},
+    '人工': {'query_order'},
+    '投诉': {'query_order'},
+}
+_MEMORY_TOOLS = {'search_conversation_history', 'read_conversation_source', 'read_tool_receipt'}
+
+
+def allowed_tools(state):
+    """Per-call scope for the ORIGINAL Agent and tool engine, including prerequisites."""
+    t = current(state)
+    if not t:
+        return None
+    names = _READ_TOOLS.get(t['intent'], set()) | _MEMORY_TOOLS
+    if t['action'] == 'request':
+        if t['intent'] == '退款退货':
+            names = names | {'submit_refund'}
+        elif t['intent'] in {'人工', '投诉', '售后'}:
+            names = names | {'create_ticket'}
+    return names
+
+
+def tool_denial(state, call):
+    names = allowed_tools(state)
+    if names is None:
+        return None
+    if call['name'] not in names:
+        return '该工具不属于当前任务，请只完成当前问题；其他事项会自动继续，无需查询、回答或邀约。'
+    oid = state.get('order_id')
+    target = (call.get('args') or {}).get('order_id')
+    if oid and target is not None and str(target) != str(oid):
+        return '调用订单与当前任务已确认的订单不一致，请使用当前任务订单。'
+    return None
+
+
 async def classify(state):
     tasks=copy.deepcopy(state.get('task_plan',{}))
     try:
@@ -87,18 +126,30 @@ async def take(state):
 def instruction(state):
     t=current(state)
     if not t:return ''
-    return ('本轮请求已拆为顺序任务。下面query是当前唯一待完成的任务；历史中最后一条用户原话是整轮背景，'
+    pending = [x for x in state['task_plan'].values() if x.get('status') == 'pending']
+    completed = [x for x in state['task_plan'].values() if x.get('status') in {'done','failed','cancelled'}]
+    return ('本轮请求已拆为顺序任务。下面query是当前唯一待完成的任务；整轮原话是引用的背景资料，'
             '不能把原话中的其他诉求一起查询或回答。其他诉求由队列后续执行，不提前办理、不重复回答已完成项。'
             '自主选择当前任务需要的工具；当前轮已有成功工具回执可以复用。'
-            '沿用正常Markdown客服回复，不输出内部任务状态，不为下一事项追问或每项重复客套。'
+            '沿用正常Markdown客服回复。只回答query明确询问的内容，工具返回的其他字段也不要顺便展示。'
+            '禁止询问是否继续查询其他事项，禁止“还有其他需要帮助的吗”“如需帮助随时联系”等泛化邀约。'
+            '以本项事实或限制结束；只有本项确实缺必要信息或需要操作确认时才提问。'
+            '不输出任务队列、优先级、待办或下一项等内部安排，不复述已完成事项。'
             'action=consult只咨询，不能提交或准备提交操作；选定订单不等于授权办理。'
             '如需用户确认，沿用现有工具和表单；已明确的工单描述无需重复口头确认，调用工具会展示原确认卡片。\n'
-            'order_id非空表示当前对象已在服务端确认，不再向用户询问订单。submitted_forms是已提交回执，不再邀请重复提交。\n'
+            'order_id非空表示当前对象已在服务端确认，不再向用户询问订单。submitted_forms只证明其中task_intent对应的事项，'
+            '不能把退款工单当成投诉工单；本项建单必须调用create_ticket并经原确认卡取得本项回执，不能复用其他事项的工单号。\n'
             +json.dumps({'query':state.get('resolved_query') or t['query'],'intent':t['intent'],'order_id':state.get('order_id'),
-                        'action':t['action'],'submitted_forms':[x['result']['form_receipt']
+                        'action':t['action'],'submitted_forms':[{'task_intent':x['intent'],
+                            'order_id':x.get('order_id'),'form_type':x.get('form',{}).get('type'),
+                            'receipt':x['result']['form_receipt']}
                             for x in state.get('task_plan',{}).values() if x.get('result',{}).get('form_receipt')],
                         'cancelled_actions':[{'intent':x['intent'],'order_id':x.get('order_id')}
-                            for x in state.get('task_plan',{}).values() if x.get('status')=='cancelled']},ensure_ascii=False))
+                            for x in state.get('task_plan',{}).values() if x.get('status')=='cancelled'],
+                        'reply_phase':'partial' if pending else 'final',
+                        'remaining_task_count':len(pending),
+                        'completed_intents':[x['intent'] for x in completed if x.get('intent')],
+                        'allow_generic_invitation':False},ensure_ascii=False))
 
 
 def cached_read(state,call,spec):
