@@ -142,7 +142,12 @@ async def worker(arm,case_id,rep,pilot=False):
     case=next(c for c in read(OUT/'cases.json') if c['id']==case_id)
     for k,v in protocol['model_config'].items():setattr(settings,k,v)
     settings.multi_intent_enabled=arm=='enabled';settings.chat_failover_enabled=False
-    settings.model_pool_db_path=str(ROOT/'data/model_pool.sqlite3');settings.langfuse_public_key=''
+    settings.model_pool_db_path=protocol.get('model_pool_db_path',str(ROOT/'data/model_pool.sqlite3'));settings.langfuse_public_key=''
+    for k,v in protocol.get('evaluation_settings',{}).items():setattr(settings,k,v)
+    if protocol.get('candidate_shared_agent'):
+        settings.multi_intent_shared_agent_enabled=True
+        from app.core import runtime_settings
+        runtime_settings.SETTINGS_PATH=OUT/'runtime_settings.json'
     directory=OUT/('pilot' if pilot else 'runs')/f'r{rep}'/arm/case_id
     directory.mkdir(parents=True,exist_ok=True)
     if (directory/'result.json').exists():raise RuntimeError('Do not resample completed trajectory')
@@ -235,6 +240,31 @@ async def worker(arm,case_id,rep,pilot=False):
                             actor.append({'kind':'unsupported_cancel_selector'});break
                         value={'cancelled':True}
                     else:value=g['order_id']
+                elif kind=='task_form':
+                    form=intr['form'];draft=form.get('draft',{})
+                    oid=str(draft.get('order_id') or '')
+                    typ='退款' if form['type']=='refund_form' else draft.get('ticket_type','投诉')
+                    description=('退款申请 订单号='+oid if typ=='退款' else draft.get('description',''))
+                    confirm,g=preview_decision(typ,description)
+                    value={'confirmed':confirm}
+                    if confirm:
+                        payload={'conversation_id':cid,'user_id':uid,'request_id':intr['request_id']}
+                        if typ=='退款':payload.update(order_id=oid,reason='质量问题');path='/api/actions/create-refund'
+                        else:payload.update(ticket_type=typ,description=description or case['query']);path='/api/actions/create-ticket'
+                        authorized.append({'goal_id':g['id'],'kind':g['kind'],'order_id':g.get('order_id')})
+                        async with AsyncClient(transport=ASGITransport(app=api),base_url='http://local') as http:
+                            response=await http.post(path,json=payload)
+                            submission={'path':path,'status':response.status_code,'response':response.json()}
+                            actor.append({'kind':'task_form','value':value,'interrupt_id':intr['interrupt_id'],'submission':submission})
+                            if response.status_code!=200:raise RuntimeError('Form submission rejected: '+str(submission))
+                            if case['fault']=='duplicate_submission' and not duplicate_done:
+                                duplicate_done=True;again=await http.post(path,json=payload)
+                                actor.append({'kind':'duplicate_form_submit','status':again.status_code,'response':again.json()})
+                    else:
+                        if g:actor.append({'kind':'cancel_form','goal_id':g['id']})
+                        actor.append({'kind':'task_form','value':value,'interrupt_id':intr['interrupt_id']})
+                    out=await resume(intr,value)
+                    continue
                 elif kind in ('task_actions','confirm_ticket'):
                     action=intr['actions'][0] if kind=='task_actions' else {'preview':intr.get('preview',{})}
                     preview=action['preview'];confirm,g=preview_decision(preview.get('ticket_type'),preview.get('description',''))
