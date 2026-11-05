@@ -18,6 +18,8 @@ class TaskIntent(BaseModel):
     order_id: str | None = None
     order_ref: str = Field(min_length=1, description="必填对象引用，例如ref1；即使缺订单号也不能为空。同一对象共用，独立事项用不同引用")
     action: Literal["consult", "request"] = "consult"
+    selection_required: bool = False
+    selection_source: str = ""
 
 
 class TaskIntents(BaseModel):
@@ -39,6 +41,8 @@ async def classify_tasks(raw: str, query: str, history: str, candidates: list, *
 只有抱怨或一般投诉表达而没有要求登记/跟进时用投诉，沿用原安抚和用户自选入口。
 同一对象的任务共用order_ref，不能要求每个子句重复订单号。
 订单号未知也必须填写order_ref；例如“商品坏了，申请退款并登记投诉”两项都用ref1，选择订单后共用。
+本轮明确要求先选、重新选订单时，该对象组selection_required=true，selection_source逐字引用选择要求，order_id=null，query使用“选中的订单”，不能继承历史订单号。
+选单是该组任务的前置交互，不额外拆成订单查询任务。否定、假设、引用中的选单要求不生效；正常“刚刚那单”仍承接历史。
 通用咨询也分配一个独立引用；不允许空字符串。不要把“未知订单”误当成“没有对象关系”。
 order_id只能来自提供的可信候选。明确指定优先；两笔订单指代不明时留空。
 独立退款、另一笔订单不能借旁边物流任务的订单，使用不同order_ref。

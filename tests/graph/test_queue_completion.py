@@ -31,6 +31,59 @@ def task(source,intent_name,oid=None,ref='same',action='consult'):
     return dict(source=source,query=source,intent=intent_name,order_id=oid,order_ref=ref,action=action)
 
 
+async def test_history_order_cannot_override_explicit_reselection(corrected,monkeypatch,tmp_path):
+    model(monkeypatch,corrected,[task('查询订单1001','订单','1001')],
+        [call('query_order',{'order_id':'1001'},'old'),AIMessage('历史订单1001。')])
+    path=str(tmp_path/'reselect.sqlite')
+    async with AsyncSqliteSaver.from_conn_string(path) as saver:
+        old=await start(saver,monkeypatch,'查询订单1001')
+        cid=old['conversation_id']
+        items=[task('申请退款','退款退货','1001',action='request'),task('查询同一单物流','物流','1001')]
+        m=model(monkeypatch,corrected,items,[call('query_order',{'order_id':'2002'},'new'),
+            call('query_logistics',{'tracking_no':queue_contract.business.order_snapshot('2002')['tracking_no']},'log'),
+            AIMessage('选中订单的物流已揽件，在成都。'),
+            call('submit_refund',{'order_id':'2002','reason':'质量问题'},'refund'),AIMessage('等待确认。')])
+        out=await runtime.run_turn('alice','请先让我选，申请退款，查询同一单物流',cid,multi_intent_enabled=True)
+        assert out['interrupt']['type']=='select_order' and not m.seen
+        assert len(out['state']['planning_proposals'])==2
+        assert all(not t['order_id'] for t in out['state']['task_plan'].values())
+    async with AsyncSqliteSaver.from_conn_string(path) as saver:
+        monkeypatch.setattr(runtime,'_graph',build_graph(saver))
+        out=await resume(out,'2002')
+        assert out['interrupt']['type']=='task_form'
+        assert out['interrupt']['form']['draft']['order_id']=='2002'
+        assert out['state']['task_plan']['1']['status']=='done'
+        assert all(t['order_id']=='2002' for t in out['state']['task_plan'].values())
+        assert not await tickets()
+        out=await resume(out,{'confirmed':False})
+        assert out['interrupt'] is None and not await tickets()
+
+
+@pytest.mark.parametrize('raw,needs',[
+    ('请先让我选，查询物流',True),
+    ('不用让我选，就查询订单1001',False),
+    ('如果要退款再让我选，现在查询订单1001',False),
+    ('刚刚那单物流到哪了',False),
+])
+def test_selection_requirement_keeps_negation_and_history(raw,needs,monkeypatch):
+    monkeypatch.setattr(queue_contract.business,'owns_order',lambda u,o:True)
+    items=[task(raw,'物流','1001')]
+    valid,errors=queue_contract.validate_proposals(items,{'task_origin':raw,'user_id':'alice'},{'1001'},repair_selection=True)
+    assert not errors
+    assert valid['0']['selection_required']==needs
+    assert valid['0']['order_id']==(None if needs else '1001')
+
+
+def test_reselection_is_scoped_to_independent_refund(monkeypatch):
+    monkeypatch.setattr(queue_contract.business,'owns_order',lambda u,o:True)
+    raw='查询订单1001物流；退款订单请让我选择'
+    items=[task('查询订单1001物流','物流','1001',ref='first'),
+        task('退款订单请让我选择','退款退货','1001',ref='second',action='request')]
+    valid,errors=queue_contract.validate_proposals(items,{'task_origin':raw,'user_id':'alice'},{'1001'},repair_selection=True)
+    assert not errors and valid['0']['order_id']=='1001'
+    assert valid['1']['order_id'] is None and valid['1']['selection_required']
+
+
 async def test_nc13_selection_is_shared_and_logistics_finishes_before_refund(corrected,monkeypatch,tmp_path):
     items=[task('申请退款','退款退货',action='request'),task('查同一单物流','物流')]
     m=model(monkeypatch,corrected,items,[call('query_order',{'order_id':'1001'},'o'),

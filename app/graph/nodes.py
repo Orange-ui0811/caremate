@@ -109,6 +109,9 @@ async def fetch_order(state) -> dict:
     工具那道校验够不着。用户随口报的号、resume 端点回传的号,都得过同一道判断。"""
     uid = state.get("user_id", "")
     oid = state.get("order_id") or _extract_order_id(_effective_query(state))
+    from app.graph import queue_contract
+    if queue_contract.enabled(state) and queue_contract.active(state).get('wait_reason')=='select_order':
+        oid=None  # The interrupt's resume value, not rewritten history, chooses the object.
     while not business.owns_order(uid, str(oid or "")):
         orders = business.list_user_orders(uid)                        # 只读,可安全重跑
         from app.graph import queue_contract

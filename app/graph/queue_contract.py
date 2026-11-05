@@ -43,7 +43,9 @@ def literal_span(raw, value):
     return raw[mapping[pos]:mapping[pos + len(needle) - 1] + 1] if pos >= 0 else None
 
 
-def validate_proposals(proposals, state, candidates):
+def validate_proposals(proposals, state, candidates, *, repair_selection=False):
+    from app.core import order_selection
+    selection_groups,ambiguous=order_selection.groups(state['task_origin'],proposals)
     valid, errors = {}, []
     for i, proposal in enumerate(proposals):
         try:
@@ -51,13 +53,21 @@ def validate_proposals(proposals, state, candidates):
             span = literal_span(state['task_origin'], t['source'])
             if not span: raise ValueError('source:必须逐字引用当前原话中的连续片段')
             t['source'] = span
+            if ambiguous:raise ValueError('selection_source:无法确定本轮选单要求对应哪个对象组')
+            choice=selection_groups.get(t['order_ref'])
+            if t['selection_required'] and not choice:
+                raise ValueError('selection_source:没有本轮有效选择要求，不能替用户增加选单')
+            if choice:
+                if t.get('order_id') and not repair_selection:
+                    raise ValueError('selection_required:本轮要求先选单，不得继承历史订单；同组order_id应为空')
+                t.update(selection_required=True,selection_source=choice,order_id=None,query=t['source'])
             oid = t.get('order_id')
             if oid and (oid not in candidates or not business.owns_order(state['user_id'],oid)):
                 raise ValueError('order_id:没有合法来源或不属于当前用户')
             explicit = set(re.findall(r'(?<!\d)\d{4,}(?!\d)', span)) & candidates
             if oid and len(explicit) == 1 and oid not in explicit:
                 raise ValueError('order_id:与本项明确指定的订单冲突')
-            if not oid and len(explicit)==1 and t['intent'] in {'订单','物流','退款退货','售后'}:
+            if not oid and len(explicit)==1 and not choice and t['intent'] in {'订单','物流','退款退货','售后'}:
                 raise ValueError('order_id:本项明确订单已在可信候选中，不应再次选单')
             # Detect contradictions only; never grant request authority by regex.
             source = span
@@ -98,7 +108,7 @@ async def classify(state):
                 kwargs = {'feedback':{'attempts':attempts,'instruction':'修正错误，返回完整当前任务列表；保留原话、授权和对象。'}} if attempt else {}
                 proposals = await intent.classify_tasks(state['task_origin'],state['resolved_query'],
                     nodes._history_text(state,stage='intent'),context['candidates'],**kwargs)
-                checked, errors = validate_proposals(proposals,state,candidates)
+                checked, errors = validate_proposals(proposals,state,candidates,repair_selection=bool(attempt))
                 attempts.append({'proposals':proposals,'errors':errors})
                 # Preserve validated independent proposals if correction loses them.
                 for t in checked.values(): valid[(t['source'],t['intent'],t.get('order_id'))] = t
@@ -111,7 +121,7 @@ async def classify(state):
                 attempts.append({'errors':unresolved})
                 # Network failures are not repeated under the guise of schema repair.
                 if not isinstance(exc, ValueError): break
-    checked, merge_errors = validate_proposals(list(valid.values()),state,candidates) if valid else ({},[])
+    checked, merge_errors = validate_proposals(list(valid.values()),state,candidates,repair_selection=True) if valid else ({},[])
     valid = {(t['source'],t['intent'],t.get('order_id')):t for t in checked.values()}
     unresolved += merge_errors
     tasks = copy.deepcopy(state.get('task_plan',{}))
@@ -132,7 +142,12 @@ async def classify(state):
 def prepare_take(state, update):
     t = update['task_plan'][update['active_task']]
     need_order = t['intent'] in {'订单','物流','退款退货','售后'}
-    if need_order and not update.get('order_id'):
+    selected=state.get('queue_orders',{}).get(t['order_ref'],{})
+    force=t.get('selection_required') and selected.get('selection_message_id')!=state['current_message_id']
+    if force:
+        update.update(order_id='',order_data={},resolved_query=t['source'])
+        t['order_id']=None
+    if need_order and (force or not update.get('order_id')):
         t.update(status='blocked',wait_reason='select_order')
     update['queue_review_retry'] = False
     return update
@@ -152,6 +167,9 @@ async def bind_order(state):
     selected=t.get('wait_reason')=='select_order'
     shared=copy.deepcopy(state.get('queue_orders',{}))
     record={'order_id':oid,'data':state['order_data'],'source':'user_selection' if selected else 'verified_order'}
+    if selected:record['selection_message_id']=state['current_message_id']
+    elif shared.get(t['order_ref'],{}).get('order_id')==oid:
+        record={**shared[t['order_ref']],**record}
     shared[t['order_ref']]=record
     for item in tasks.values():
         if item.get('order_ref')==t['order_ref'] and item.get('status') in {'pending','running','blocked'}:
