@@ -1,0 +1,30 @@
+"""Frozen synthetic acceptance cases; no real conversations are exported."""
+CASES = [
+ dict(id='S1',focus=['1001'],raw='刚刚那个订单现在送到哪了，它是什么商品，我可以退货吗',
+      kinds=['order','logistics','return_advice'],orders=['1001'],selections=0,tickets=[],action='confirm'),
+ dict(id='S2',focus=['1001'],raw='刚刚那笔订单商品有质量问题，请为这笔订单申请退款，并登记投诉商家的工单',
+      kinds=['refund','complaint'],orders=['1001'],selections=0,tickets=['退款','投诉'],action='confirm'),
+ dict(id='S3',focus=[],raw='我买的商品有质量问题，我要申请退款，还要登记投诉商家的工单',
+      kinds=['refund','complaint'],orders=['1001'],selections=1,tickets=['退款','投诉'],action='confirm'),
+ dict(id='S4',focus=[],raw='查询订单1001的物流，并对订单2002申请退款',
+      kinds=['logistics','refund'],orders=['1001','2002'],selections=0,tickets=[],action='confirm'),
+ dict(id='S5',focus=[],raw='查询订单1001的物流，另外有一笔订单我要申请退款，退款订单我自己选择',
+      kinds=['logistics','refund'],orders=['1001','2002'],selections=1,tickets=[],action='select_2002'),
+ dict(id='S6',focus=['1001','2002'],raw='刚才说的两笔订单中，那笔订单现在送到哪了，它是什么商品',
+      kinds=['order','logistics'],orders=['1001'],selections=1,tickets=[],action='confirm'),
+ dict(id='S7',focus=['1001'],raw='刚刚那个订单现在送到哪了，它是什么商品，有没有使用说明',
+      kinds=['order','logistics','knowledge'],orders=['1001'],selections=0,tickets=[],action='confirm'),
+ dict(id='S8',focus=[],raw='我要申请商品质量问题退款，还要登记一张投诉商家的工单',
+      kinds=['refund','complaint'],orders=['1001'],selections=1,tickets=['投诉'],action='cancel_refund'),
+]
+RULES = {
+ 'versions':['single','simple'], 'repetitions':3,'total_trajectories':48,
+ 'selection':'Count actual order-selection interrupts/cards; compare exact gold, not only excess.',
+ 'binding':'Every completed business fact/operation must belong to the expected order for its task. S5 refund must remain unresolved until selection.',
+ 'completion':'Read requires a current-turn successful tool receipt; advice requires retrieved policy and bounded visible explanation; writes require a confirmed durable receipt. Unpaid refunds are correctly resolved without a ticket.',
+ 'knowledge':'S7 must pass product identity into retrieval. Evidence-gate refusal is recorded separately, not counted as an answered manual.',
+ 'confirmation':'Only click offered cards; no helper followup questions to rescue missing tasks. S8 decline refund, approve complaint.',
+ 'quality':'Check requested fact/advice coverage, factual grounding, no unsupported eligibility approval, no internal status or repeated invitation. Save visible replies for audit.',
+ 'failures':'Keep every attempt including provider errors. Never replace a failed formal trajectory with a better retry.',
+ 'history':'Identical synthetic user/assistant history, known-order seed records and isolated business fixtures for both versions. No actual #129/#136 history.',
+}

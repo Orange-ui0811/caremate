@@ -16,6 +16,13 @@ def merge_dict(a: dict | None, b: dict | None) -> dict:
 
 
 class ConversationState(TypedDict, total=False):
+    simple_facts: dict
+    simple_presented: dict
+    simple_citations: list
+    simple_decision: object
+    simple_execution: bool
+    simple_tool: dict
+    simple_next: str
     task_plan_version: int
     planning_context: dict
     planning_error: str

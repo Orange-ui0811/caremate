@@ -924,7 +924,7 @@
       if (!message) return;
       inputEl.value = "";
       autoGrow();
-      addRow("user").textContent = message;
+      const userBubble = addRow("user"); userBubble.textContent = message;
       setBusy(true);
       const bubble = addRow("bot");
       const body = JSON.stringify({ user_id: getUserId(), message, conversation_id: getConversationId(), request_id: crypto.randomUUID(), multi_intent_enabled: multiIntentEnabled });
@@ -934,10 +934,20 @@
         try {
           await streamInto(bubble, async () => {
             const response = await fetch("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body});
-            if (!response.ok) { const data = await response.json(); throw new Error(data.detail || '请求失败'); }
+            if (!response.ok) {
+              const data = await response.json();
+              if (data.detail?.code === 'pending_task_card') {
+                const error = new Error(data.detail.message); error.pendingCard = true; throw error;
+              }
+              throw new Error(typeof data.detail === 'string' ? data.detail : '请求失败');
+            }
             return response;
           });
         } catch (err) {
+          if (err.pendingCard) {
+            inputEl.value = message; autoGrow(); userBubble.closest('.row')?.remove();
+            bubble.textContent = err.message; return;
+          }
           bubble.className = "bubble error";
           bubble.textContent = err.message || "回复失败，请查看会话记录";
           const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn'; retry.textContent = '取回本次结果';

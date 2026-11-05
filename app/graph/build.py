@@ -20,7 +20,10 @@ def _builder(*, subflows=False) -> StateGraph:
     b.add_edge(START, "task_precheck")
     b.add_conditional_edges("task_precheck", lambda s: "multi" if s.get("plan_id") else "single",
                             {"multi": "task_safety", "single": "resolve_reference"})
-    b.add_edge('task_safety','task_plan')
+    from app.graph import simple_loop
+    simple_loop.install(b)
+    b.add_conditional_edges('task_safety',lambda s:'simple' if s.get('task_plan_version')==3 else 'legacy',
+                            {'simple':'sl_resolve','legacy':'task_plan'})
     if subflows:
         from app.graph import subflow_tasks
         subflow_tasks.install(b)

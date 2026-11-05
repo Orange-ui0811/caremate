@@ -50,7 +50,12 @@ def _legacy_recall_text(state, *, visible_messages=()) -> str:
     try:
         if settings.context_legacy_recall_mode == "all_visible_neighbors":
             from app.core.history_recall import dialogue_supplement, persistent_ids
-            result = dialogue_supplement(state, visible_message_ids=persistent_ids(visible_messages))
+            visible_ids = persistent_ids(visible_messages)
+            if state.get('task_plan_version') == 3:
+                # Replies emitted before an interrupt belong to this ongoing
+                # turn, not the prior-dialogue recall watermark.
+                visible_ids = [mid for mid in visible_ids if mid <= state.get('current_message_id', 0)]
+            result = dialogue_supplement(state, visible_message_ids=visible_ids)
         else:
             result = old_dialogue_supplement(state)
     except (ValueError, TypeError, KeyError):
@@ -372,6 +377,12 @@ def _agent_messages(state, *, tool_schemas=None) -> list:
     摘要因此跟证据一起走用户侧那条消息。
 
     滑窗=摘要边界锚点切 + trim_messages token 兜底;State 全量历史不动,这里只现拼精简版。"""
+    if state.get('simple_execution'):
+        from app.graph.simple_loop import agent_instruction
+        messages = _agent_messages({**state,'simple_execution':False},tool_schemas=tool_schemas)
+        return [SystemMessage(messages[0].content + agent_instruction(state)), *messages[1:],
+                HumanMessage('继续当前已核验的只读步骤，请调用这个工具，参数已由服务端确定：'
+                             + json.dumps(state['simple_tool'],ensure_ascii=False))]
     if state.get('task_scope') and state.get('task_context'):
         # The parent supplied validated task-local data. Never recover siblings
         # into this scoped child or manufacture persistent IDs for derived text.
@@ -430,7 +441,9 @@ async def main_agent(state, config=None) -> dict:
     if context_runtime.enabled() and settings.context_recovery_tools_enabled:
         from app.tools.context import get_context_specs
         specs = [*specs, *get_context_specs(state.get("current_message_id"))]
-    if state.get('task_scope'):
+    if state.get('simple_execution'):
+        specs = [s for s in specs if s.name == state['simple_tool']['name']]
+    elif state.get('task_scope'):
         specs = [s for s in specs if s.name in state['task_scope']['allowed_tools']]
     model = get_chat_model(streaming=True).bind_tools([s.tool for s in specs])
     try:

@@ -55,6 +55,16 @@ async def chat(req: ChatRequest):
                 await asyncio.to_thread(store.finish_replay, replay_key, "REJECTED")
             raise HTTPException(409, "当前会话还有问题正在处理，请等待该轮结束后再发送")
 
+    try:
+        await runtime.ensure_no_pending_simple(req.conversation_id, req.user_id)
+    except (runtime.ResumeRejected, runtime.ConversationNotFound) as exc:
+        if req.conversation_id is not None:
+            await asyncio.to_thread(turn_store.release_turn, req.conversation_id, turn_owner)
+        if store:
+            await asyncio.to_thread(store.finish_replay, replay_key, "REJECTED")
+        if isinstance(exc, runtime.ConversationNotFound):raise HTTPException(404, "会话不存在")
+        raise HTTPException(409, detail={"code":"pending_task_card","message":str(exc)})
+
     async def event_stream() -> AsyncIterator[str]:
         try:
             options = {'multi_intent_enabled': req.multi_intent_enabled} if req.multi_intent_enabled is not None else {}

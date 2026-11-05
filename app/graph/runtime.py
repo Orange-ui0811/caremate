@@ -59,6 +59,18 @@ def get_graph():
     return _graph
 
 
+async def ensure_no_pending_simple(conversation_id, user_id):
+    """Check before appending a message; otherwise its watermark invalidates the card."""
+    if conversation_id is None:return
+    conv=await repository.get_conversation(conversation_id)
+    # Leave existing not-found/ownership error behavior to the normal entry.
+    if conv is None or conv.user_id!=user_id:return
+    snapshot=await get_graph().aget_state({'configurable':{'thread_id':str(conversation_id)}})
+    state=snapshot.values or {}
+    if state.get('task_plan_version')==3 and any(t.get('status')=='blocked' for t in state.get('task_plan',{}).values()):
+        raise ResumeRejected('请先通过当前卡片选择订单、确认或取消，原来的待办事项会继续保留。')
+
+
 async def conversation_mode(conversation_id: int) -> bool:
     """Read the durable conversation choice, including old multi-task checkpoints."""
     snapshot = await get_graph().aget_state({'configurable': {'thread_id': str(conversation_id)}})
@@ -143,6 +155,7 @@ def _graph_input(user_id: str, message: str, cid: int, msg_id: int,
             "current_message_id": msg_id,
             "task_plan": {}, "task_events": [], "task_decisions": {}, "plan_id": "", 'task_planning_error':False,
             'task_plan_version':1,'planning_context':{},'planning_error':'','planning_proposals':[],'task_context':{},
+            'simple_facts':{},'simple_presented':{},'simple_citations':[],'simple_decision':{},'simple_execution':False,
             'subflow_results': {},
             'subflow_presented': {}, 'subflow_reply_id':'', 'subflow_presentation':False,
             "trace": None}  # merge 通道:None=重置哨兵(见 merge_dict),清上一轮 trace 残留
@@ -251,6 +264,7 @@ def task_reply_text(final, saved, *, resumed=False):
 
 async def _run_turn(user_id, message, conversation_id) -> dict:
     """非流式:落 user 消息 → ainvoke → 返回终态(供 /api/agent、eval)。遇 interrupt 带 orders。"""
+    await ensure_no_pending_simple(conversation_id,user_id)
     cid, summary, upto = await _ensure_conversation(user_id, conversation_id)
     msg_id = await repository.append_message(cid, "user", content=message)
     # ch09:langfuse_session_id 让同一会话多轮在 Langfuse 界面串成一组(未挂回调时无害)
@@ -342,7 +356,7 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
                     recovery_sent = True
                 if node in CITATION_NODES and upd.get("citations"):
                     yield {"type": "citations", "items": upd["citations"]}
-                if node in {"agent_tools", "prepare_business_evidence"}:
+                if node in {"agent_tools", "prepare_business_evidence", "sl_tools"}:
                     for m in upd.get("messages", []):
                         name = getattr(m, "name", None)
                         # submit_refund 仍是「拦成前端表单」的合成消息,不发工具帧;
@@ -367,6 +381,7 @@ async def stream_turn(user_id, message, conversation_id, *, multi_intent_enabled
 
 async def _stream_turn(user_id, message, conversation_id) -> AsyncIterator[dict]:
     """流式:落 user 消息 → astream 多模式 → 事件 dict(供 /api/chat 转 SSE)。"""
+    await ensure_no_pending_simple(conversation_id,user_id)
     cid, summary, upto = await _ensure_conversation(user_id, conversation_id)
     msg_id = await repository.append_message(cid, "user", content=message)
     inp = await _new_turn_input(user_id, message, cid, msg_id, summary, upto,
