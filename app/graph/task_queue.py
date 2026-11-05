@@ -96,7 +96,9 @@ def instruction(state):
             'order_id非空表示当前对象已在服务端确认，不再向用户询问订单。submitted_forms是已提交回执，不再邀请重复提交。\n'
             +json.dumps({'query':state.get('resolved_query') or t['query'],'intent':t['intent'],'order_id':state.get('order_id'),
                         'action':t['action'],'submitted_forms':[x['result']['form_receipt']
-                            for x in state.get('task_plan',{}).values() if x.get('result',{}).get('form_receipt')]},ensure_ascii=False))
+                            for x in state.get('task_plan',{}).values() if x.get('result',{}).get('form_receipt')],
+                        'cancelled_actions':[{'intent':x['intent'],'order_id':x.get('order_id')}
+                            for x in state.get('task_plan',{}).values() if x.get('status')=='cancelled']},ensure_ascii=False))
 
 
 def cached_read(state,call,spec):

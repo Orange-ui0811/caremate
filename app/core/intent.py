@@ -16,7 +16,7 @@ class TaskIntent(BaseModel):
     query: str = Field(min_length=1, description="只包含这一项诉求，保留咨询或办理原意，补全已知对象")
     source: str = Field(min_length=1, description="本轮原话中逐字引用的诉求片段")
     order_id: str | None = None
-    order_ref: str = Field(default="", description="同一订单共用引用；独立或另一笔订单使用不同引用")
+    order_ref: str = Field(min_length=1, description="必填对象引用，例如ref1；即使缺订单号也不能为空。同一对象共用，独立事项用不同引用")
     action: Literal["consult", "request"] = "consult"
 
 
@@ -38,6 +38,8 @@ async def classify_tasks(raw: str, query: str, history: str, candidates: list) -
 明确登记投诉工单/要求人工办理为人工且action=request，query保留具体投诉内容。
 只有抱怨或一般投诉表达而没有要求登记/跟进时用投诉，沿用原安抚和用户自选入口。
 同一对象的任务共用order_ref，不能要求每个子句重复订单号。
+订单号未知也必须填写order_ref；例如“商品坏了，申请退款并登记投诉”两项都用ref1，选择订单后共用。
+通用咨询也分配一个独立引用；不允许空字符串。不要把“未知订单”误当成“没有对象关系”。
 order_id只能来自提供的可信候选。明确指定优先；两笔订单指代不明时留空。
 独立退款、另一笔订单不能借旁边物流任务的订单，使用不同order_ref。
 咨询不升级为办理，无法确定时action=consult。商品咨询query保留已知商品名，不推断型号。

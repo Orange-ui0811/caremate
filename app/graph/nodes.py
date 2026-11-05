@@ -396,6 +396,13 @@ def _agent_messages(state, *, tool_schemas=None) -> list:
             suffix_ids={m.id for m in state.get('messages',[])[state.get('queue_start',0):] if m.id}
             index=next((i for i,m in enumerate(messages) if getattr(m,'id',None) in suffix_ids),len(messages))
             messages.insert(index,material)
+            query=_effective_query(state)
+            if state.get('order_id') and state['order_id'] not in query:
+                query=f"订单{state['order_id']}：{query}"
+            # Match the single-intent Agent contract: the latest request is the
+            # one task it should act on. This derived message has no DB ID and
+            # is never persisted as if the customer had sent another message.
+            messages.insert(index+1,HumanMessage(query))
     return messages
 
 

@@ -115,6 +115,7 @@ async def test_real_agent_and_tools_preserve_registry_history_and_cache(setup,mo
         first_reply=next(i for i,m in enumerate(view) if m.content=='商品是智能猫砂盆。')
         assert material>first_reply  # Current task materials follow completed siblings.
         assert '订单1001送到哪了' in view[material].content
+        assert view[material+1].content=='订单1001送到哪了' and view[material+1].id is None
         from sqlalchemy import select
         from app.db.models import ToolAuditLog
         async with workflow.base.async_session() as s:
@@ -160,6 +161,9 @@ async def test_original_refund_form_then_original_ticket_confirmation(setup,monk
         if confirmed:
             material=next(m.content for m in model.seen[-1] if m.id==nodes.TURN_CTX_ID)
             assert 'ticket_no' in material and 'submitted_forms' in material
+        else:
+            material=next(m.content for m in model.seen[-1] if m.id==nodes.TURN_CTX_ID)
+            assert '"cancelled_actions": [{"intent": "退款退货", "order_id": "1001"}]' in material
         with pytest.raises(runtime.ResumeRejected):await resume(old,{'confirmed':confirmed})
         out=await resume(out,{'confirmed':True})
         assert out['interrupt'] is None and len(setup)==1 and not model.replies
