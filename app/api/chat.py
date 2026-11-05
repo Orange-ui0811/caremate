@@ -69,7 +69,9 @@ async def chat(req: ChatRequest):
         try:
             options = {'multi_intent_enabled': req.multi_intent_enabled} if req.multi_intent_enabled is not None else {}
             async for ev in runtime.stream_turn(req.user_id, req.message, req.conversation_id, **options):
-                if ev["type"] == "task_event":
+                if ev['type']=='task_start':
+                    yield _sse({'event':'task_start'})
+                elif ev["type"] == "task_event":
                     yield _sse({"event": "task_event", **{k: v for k, v in ev.items() if k != "type"}})
                 elif ev["type"] == "tool":
                     yield _sse({"event": "tool", "name": ev["name"]})

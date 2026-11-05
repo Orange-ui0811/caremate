@@ -172,3 +172,12 @@ async def submit(cid, uid, operation_id, args, *, confirmed):
         session.add(WorkflowRecord(key=key, conversation_id=cid, payload=receipt))
         await session.commit()
         return receipt
+
+
+async def receipt(cid, uid, operation_id):
+    """Read an existing operation receipt; never create or repeat an operation."""
+    async with base.async_session() as session:
+        await _owned(session,cid,uid)
+        row=await session.get(WorkflowRecord,'op:'+operation_id)
+        if row is not None and row.conversation_id==cid:return row.payload
+    return None

@@ -1,0 +1,66 @@
+多意图共用原 Agent 队列（计划版本 4）
+
+分支：feature/multi-intent-shared-agent
+保留的起点：6b4d735，原 feature/multi-intent-simple-loop 未移动。
+
+执行路径
+  task_precheck / task_safety（现有入口）
+  → resolve_reference（原指代消解与历史选择）
+  → classify_tasks（九类意图由单值扩展为列表，仅一次分类调用）
+  → queue_take（按优先级取一项）
+  → 原五路路由及必要前置节点
+  → main_agent ⇄ agent_tools（原 ReAct 循环，完整原工具注册表）
+  → log（原回复保存）
+  → queue_complete → 下一项 / 等待原表单
+
+原五路仍包含知识检索与证据闸、退款取单与政策检索、业务 Agent、
+投诉固定出口、普通固定出口。原本由固定出口处理的意图不强行改成 Agent。
+新路径不调用 simple_loop 的业务执行器或 present，也不调用独立子图。
+旧实现保留，只用于旧计划版本的兼容恢复。
+
+task_queue.py 只负责识别的输入/输出校验、任务排序、共享引用、状态与回执。
+业务工具调用只发生在原 agent_tools / engine 以及原流程已有的前置节点。
+没有新增退款判定函数、投诉提交函数、答案生成模型或答案替换模板。
+
+顺序为：现有安全提醒前置，然后订单、物流、知识/咨询、退款办理、投诉/人工。
+同优先级保持原文顺序。所有任务共享父会话历史和本轮工具回执。
+同轮相同参数的成功只读调用可复用；下一用户轮的历史工具回执不当作新查询。
+
+上下文和回复
+  继续使用原滑窗、摘要、历史召回与上下文预算。
+  用户原话和历史消息均保留；不改写持久化用户消息，不伪造消息编号。
+  当前任务内容、对象及表单回执放入原本轮材料块。
+  该材料块位于已完成任务回复之后、当前任务 ReAct 后缀之前。
+  原 AGENT_SYSTEM 保留，仅追加稳定的队列任务边界说明。
+  main_agent 函数体与起点提交的 AST 一致。
+  每项回复由原 Agent 生成，沿原 messages → delta → SSE → Markdown 路径显示。
+  task_start 只切换普通回复气泡，不输出内部任务状态，不生成额外总结。
+
+确认和恢复
+  原 fetch_order 选单和原 agent_tools 的 confirm_ticket 中断继续使用。
+  submit_refund 仍只打开原退款表单；填写并确认后仍调用原 create-refund 接口。
+  task_form 是原表单到任务队列的续办桥，不执行写操作。
+  队列仅核对已有数据库回执，再恢复后续任务。
+  原工具引擎接收稳定任务操作标识，重试使用原数据库幂等回执。
+  选中订单不代表同意提交；咨询任务不会升级为退款或建单。
+  task_plan 中 done 表示执行出口完成，不应据此直接计算业务正确率。
+  明确建单请求没有成功回执时记失败，不能因为模型说“已完成”而记成功。
+
+开关与保留
+  MULTI_INTENT_SHARED_AGENT_ENABLED=true：新多意图计划使用版本4。
+  默认 false：新计划继续使用原配置选择的旧版。
+  网页原“多意图”按钮关闭时仍使用单意图路径。
+  不新增网页上的第二个模式开关。
+  已挂起计划按其持久化版本恢复，不能简单删除旧执行器。
+
+测试与证据
+  tests/graph/test_shared_agent_queue.py：真实节点 + 受控模型 + 隔离数据库/检查点。
+  tests/ui/shared_agent_queue.cjs：原页面、原表单、流式 Markdown 与续办浏览器检查。
+  scripts/eval_shared_agent.py：真实接口、合成历史、隔离工单与独立检查点。
+  全部原始运行及失败轨迹保留于：
+  E:/Mewhelp/data/verification/multi-intent-shared-agent/20261105-v1/
+
+注意：test_multitask_comparison.py 是 20261103 的历史实验，依赖未入库的旧快照，
+并断言 nodes.py 与当时源码逐字相等。它不适合作为本分支的常规兼容检查。
+最初宽泛运行触发其缺文件失败，原报告保留；兼容回归明确排除该历史实验。
+实际语义质量必须查看报告中的人工审查，不把工程检查通过当成答案质量满分。

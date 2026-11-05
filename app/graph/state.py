@@ -16,6 +16,9 @@ def merge_dict(a: dict | None, b: dict | None) -> dict:
 
 
 class ConversationState(TypedDict, total=False):
+    queue_orders: dict  # Selected references and current-turn order receipts; not authorization.
+    queue_start: int
+    queue_answer: str
     simple_facts: dict
     simple_presented: dict
     simple_citations: list

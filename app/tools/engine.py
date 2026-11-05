@@ -128,6 +128,7 @@ async def execute_tool_call(
     tool_call: dict, conversation_id: int, specs: dict[str, ToolSpec],
     *, confirmed: bool = False, deny_note: str | None = None, user_id: str = "",
     message_watermark: int | None = None,
+    operation_id: str | None = None,
 ) -> ToolRun:
     """统一入口(never-raises 契约):无论校验拦下、权限拒绝还是真故障,一律回 ToolRun,
     坏消息包成 ToolMessage 回灌模型。confirmed 是写操作确认令牌,只能由 agent_tools 在
@@ -216,7 +217,8 @@ async def execute_tool_call(
     while True:
         try:
             from app.db.workflow import operation_context
-            operation_key = hashlib.sha256(f"c{conversation_id}:m{message_watermark}:tool:{tc_id}".encode()).hexdigest()
+            operation_key = hashlib.sha256((f'c{conversation_id}:{operation_id}' if operation_id and spec.permission=='write'
+                                           else f"c{conversation_id}:m{message_watermark}:tool:{tc_id}").encode()).hexdigest()
             operation_token = operation_context.set((user_id, "tool:" + operation_key))
             try:
                 result = await asyncio.wait_for(spec.tool.ainvoke(args), timeout=tool_timeout)

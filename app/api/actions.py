@@ -116,6 +116,7 @@ async def _idempotent_ticket(req, description, ticket_type):
             return await repository.create_ticket(req.conversation_id, description, ticket_type)
     if not req.request_id:
         raise ValueError("操作卡版本已过期，请重新打开表单确认")
+    await runtime.validate_form_request(req)
     from app.db.workflow import submit
     receipt = await submit(req.conversation_id, req.user_id,
                            f"c{req.conversation_id}:form:{req.request_id}",
@@ -159,7 +160,9 @@ async def resume_action(req: ResumeRequest):
     async def event_stream() -> AsyncIterator[str]:
         try:
             async for ev in bounded_resume():
-                if ev["type"] == "task_event":
+                if ev['type']=='task_start':
+                    yield _sse({'event':'task_start'})
+                elif ev["type"] == "task_event":
                     yield _sse({"event": "task_event", **{k: v for k, v in ev.items() if k != "type"}})
                 elif ev["type"] == "tool":
                     yield _sse({"event": "tool", "name": ev["name"]})

@@ -2,6 +2,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.graph import nodes
 from app.graph import tasks
+from app.graph import task_queue
 from app.graph.business_evidence import prepare_business_evidence
 from app.graph.routing import confidence_gate, route_by_intent, should_continue
 from app.graph.state import ConversationState
@@ -22,8 +23,19 @@ def _builder(*, subflows=False) -> StateGraph:
                             {"multi": "task_safety", "single": "resolve_reference"})
     from app.graph import simple_loop
     simple_loop.install(b)
-    b.add_conditional_edges('task_safety',lambda s:'simple' if s.get('task_plan_version')==3 else 'legacy',
-                            {'simple':'sl_resolve','legacy':'task_plan'})
+    b.add_conditional_edges('task_safety',lambda s:'shared' if task_queue.enabled(s) else ('simple' if s.get('task_plan_version')==3 else 'legacy'),
+                            {'shared':'resolve_reference','simple':'sl_resolve','legacy':'task_plan'})
+    b.add_node('classify_tasks',task_queue.classify)
+    b.add_node('queue_take',task_queue.take)
+    b.add_node('queue_complete',task_queue.complete)
+    b.add_node('queue_form_wait',task_queue.wait_form)
+    b.add_conditional_edges('classify_tasks',lambda s:'failed' if s.get('task_planning_error') else 'ready',
+                            {'failed':'script_reply','ready':'queue_take'})
+    b.add_conditional_edges('queue_take',lambda s:route_by_intent(s) if s.get('active_task') else 'end',
+        {'end':END,'escalate':'complaint_reply','fallback_script':'script_reply','knowledge':'retrieve_knowledge',
+         'refund_flow':'fetch_order','business':'prepare_business_evidence'})
+    b.add_conditional_edges('queue_complete',task_queue.after_complete,{'form':'queue_form_wait','next':'queue_take'})
+    b.add_edge('queue_form_wait','queue_take')
     if subflows:
         from app.graph import subflow_tasks
         subflow_tasks.install(b)
@@ -59,7 +71,8 @@ def _builder(*, subflows=False) -> StateGraph:
     b.add_node("log", nodes.log_node)
 
     # 骨架:消解 → 意图 → 分流
-    b.add_edge("resolve_reference", "classify_intent")
+    b.add_conditional_edges('resolve_reference',lambda s:'multi' if task_queue.enabled(s) else 'single',
+                            {'multi':'classify_tasks','single':'classify_intent'})
     b.add_conditional_edges("classify_intent", route_by_intent, {
         "escalate": "complaint_reply",
         "fallback_script": "script_reply",
@@ -87,7 +100,8 @@ def _builder(*, subflows=False) -> StateGraph:
     b.add_edge("complaint_reply", "log")
     b.add_edge("script_reply", "log")
     b.add_edge("fallback_reply", "log")
-    b.add_edge("log", END)
+    b.add_conditional_edges('log',lambda s:'next' if task_queue.current(s) else 'end',
+                            {'next':'queue_complete','end':END})
     return b
 
 

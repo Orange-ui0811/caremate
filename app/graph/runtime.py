@@ -67,7 +67,8 @@ async def ensure_no_pending_simple(conversation_id, user_id):
     if conv is None or conv.user_id!=user_id:return
     snapshot=await get_graph().aget_state({'configurable':{'thread_id':str(conversation_id)}})
     state=snapshot.values or {}
-    if state.get('task_plan_version')==3 and any(t.get('status')=='blocked' for t in state.get('task_plan',{}).values()):
+    if (state.get('task_plan_version')==3 and any(t.get('status')=='blocked' for t in state.get('task_plan',{}).values())) or (
+            state.get('task_plan_version')==4 and any(t.interrupts for t in snapshot.tasks)):
         raise ResumeRejected('请先通过当前卡片选择订单、确认或取消，原来的待办事项会继续保留。')
 
 
@@ -156,6 +157,7 @@ def _graph_input(user_id: str, message: str, cid: int, msg_id: int,
             "task_plan": {}, "task_events": [], "task_decisions": {}, "plan_id": "", 'task_planning_error':False,
             'task_plan_version':1,'planning_context':{},'planning_error':'','planning_proposals':[],'task_context':{},
             'simple_facts':{},'simple_presented':{},'simple_citations':[],'simple_decision':{},'simple_execution':False,
+            'queue_orders':{},'queue_start':0,'queue_answer':'',
             'subflow_results': {},
             'subflow_presented': {}, 'subflow_reply_id':'', 'subflow_presentation':False,
             "trace": None}  # merge 通道:None=重置哨兵(见 merge_dict),清上一轮 trace 残留
@@ -189,9 +191,13 @@ async def validate_resume(conversation_id: int, resume_value, *, user_id: str,
     if selected is None or len(pending) != 1:
         raise ResumeRejected("该操作卡片已失效，请基于当前请求重新确认。")
     kind = selected.value.get("type") if isinstance(selected.value, dict) else None
-    if kind == "confirm_ticket":
+    if kind in {"confirm_ticket", "task_form"}:
         if not isinstance(resume_value, dict) or set(resume_value) != {"confirmed"} or type(resume_value["confirmed"]) is not bool:
             raise ResumeRejected("当前卡片需要确认或取消工单，不能用于选择订单。")
+        if kind=='task_form' and resume_value['confirmed']:
+            from app.db import workflow
+            receipt=await workflow.receipt(conversation_id,user_id,f"c{conversation_id}:form:{selected.value['request_id']}")
+            if not receipt:raise ResumeRejected('请先通过原表单提交，未找到提交回执。')
     elif kind == "select_order":
         from app.tools import business
         if resume_value == {"cancelled": True} and selected.value.get("can_cancel"):
@@ -211,6 +217,23 @@ async def validate_resume(conversation_id: int, resume_value, *, user_id: str,
     latest = max((row.id for row in rows if row.role == "user"), default=0)
     if latest > state.get("current_message_id", 0):
         raise ResumeRejected("已有新的用户消息，旧操作未执行，请基于最新请求重新确认。")
+
+
+async def validate_form_request(req):
+    """Bind the unchanged form endpoint to its pending queue task, if any."""
+    snapshot=await get_graph().aget_state({'configurable':{'thread_id':str(req.conversation_id)}})
+    if snapshot.values.get('task_plan_version')!=4:return
+    pending=[i for t in snapshot.tasks for i in t.interrupts]
+    if len(pending)!=1 or pending[0].value.get('type')!='task_form':
+        raise ValueError('该表单已失效，请重新打开会话核实当前任务。')
+    card=pending[0].value
+    if card['request_id']!=req.request_id:raise ValueError('表单不属于当前待办事项。')
+    form=card['form']
+    if hasattr(req,'order_id'):
+        if form['type']!='refund_form' or req.order_id!=form['draft']['order_id']:
+            raise ValueError('退款表单订单与当前任务不一致。')
+    elif form['type']!='create_ticket':raise ValueError('当前等待退款表单。')
+    await validate_resume(req.conversation_id,{'confirmed':False},user_id=req.user_id,interrupt_id=pending[0].id)
 
 
 async def _new_turn_input(user_id: str, message: str, cid: int, msg_id: int,
@@ -273,7 +296,9 @@ async def _run_turn(user_id, message, conversation_id) -> dict:
     inp = await _new_turn_input(user_id, message, cid, msg_id, summary, upto,
                                 restore_history=conversation_id is not None)
     final = await get_graph().ainvoke(inp, config)
-    if final.get("task_plan"):
+    if final.get('task_plan_version')==4:
+        final['answer']=final.get('queue_answer') or final.get('answer','')
+    elif final.get("task_plan"):
         from app.db.workflow import events
         saved = await events(cid, user_id)
         final["answer"] = task_reply_text(final,saved)
@@ -292,7 +317,9 @@ async def _resume_turn(conversation_id: int, resume_value, *, user_id: str, inte
     config = {"recursion_limit":128,"configurable": {"thread_id": str(conversation_id)},
               "metadata": {"langfuse_session_id": str(conversation_id)}}
     final = await get_graph().ainvoke(Command(resume=resume_value), config)
-    if final.get("task_plan"):
+    if final.get('task_plan_version')==4:
+        final['answer']=final.get('queue_answer') or final.get('answer','')
+    elif final.get("task_plan"):
         from app.db.workflow import events
         saved = await events(conversation_id, user_id)
         final["answer"] = task_reply_text(final,saved,resumed=True)
@@ -332,7 +359,7 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
                 ev = {"type": "interrupt", "kind": payload.get("type", ""), "conversation_id": cid}
                 if getattr(chunk["__interrupt__"][0], "id", None):
                     ev["interrupt_id"] = chunk["__interrupt__"][0].id
-                for k in ("orders", "preview", "actions", "plan_id", "task_id", "can_cancel", 'task_kind', 'selection_prompt'):
+                for k in ("orders", "preview", "actions", "plan_id", "task_id", "can_cancel", 'task_kind', 'selection_prompt','form','request_id'):
                     if payload.get(k) is not None:
                         ev[k] = payload[k]
                 # Drain astream before exposing the card: its checkpoint writes
@@ -342,6 +369,11 @@ async def _stream_events(cid: int, stream_source) -> AsyncIterator[dict]:
             for node, upd in chunk.items():
                 if not isinstance(upd, dict):
                     continue
+                if node=='queue_take' and upd.get('active_task'):
+                    actions=[]
+                    yield {'type':'task_start'}
+                if node=='queue_complete' and any(t.get('status')=='blocked' for t in upd.get('task_plan',{}).values()):
+                    actions=[]  # The original form is attached to the durable interrupt.
                 for event in upd.get("task_events", []):
                     if not event.get('internal'):
                         yield {"type": "task_event", "conversation_id": cid, **event}

@@ -174,7 +174,10 @@ async def test_direct_form_write_receipt_and_parameter_conflict(data, kind, monk
     monkeypatch.setattr(settings, "context_policy", "legacy")
     # This router-only fixture has no initialized checkpointer.
     from unittest.mock import AsyncMock
+    from types import SimpleNamespace
     monkeypatch.setattr(runtime, 'conversation_mode', AsyncMock(return_value=True))
+    monkeypatch.setattr(runtime, 'get_graph', lambda: SimpleNamespace(
+        aget_state=AsyncMock(return_value=SimpleNamespace(values={'task_plan_version':1}))))
     cid, _, _ = data
     app = FastAPI()
     app.include_router(router)

@@ -10,14 +10,14 @@ NEW_OBJECT = re.compile(r'另一|另外|其他|换一(?:笔|个|单)|不是这|�
 AFTERSALES = re.compile(r'退货|退款|换货|保修|维修|售后|质量|漏电|故障|清洗')
 ISSUE = re.compile(r'漏电|触电|冒烟|起火|坏|故障|破损|质量|少发|漏发|发错|不能用|损坏')
 PRODUCT = re.compile(r'猫砂盆|饮水机|猫爬架|猫粮|猫窝|猫砂|玩具')
-PROVEN = {'simple_context', 'context_v2', 'user_selection', 'task_clause', 'adjacent_order_subject', 'adjacent_order_subject_action',
+PROVEN = {'shared_agent', 'simple_context', 'context_v2', 'user_selection', 'task_clause', 'adjacent_order_subject', 'adjacent_order_subject_action',
           'explicit_same_message_reference', 'explicit_parallel_orders',
           'conversation_reference', 'selected_reference_group'}
 
 
 def _supported(tasks, uid):
     return [t for t in tasks.values() if (t.get('kind') in binding.ORDER_KINDS or
-            (t.get('kind') in {'knowledge','return_advice'} and t.get('plan_version') in {2,3}))
+            (t.get('kind') in {'knowledge','return_advice'} and t.get('plan_version') in {2,3}) or t.get('plan_version')==4)
             and t.get('binding', {}).get('method') in PROVEN
             and t.get('binding', {}).get('status') == 'resolved'
             and business.owns_order(uid, t.get('order_id') or '')]

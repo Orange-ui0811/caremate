@@ -37,7 +37,7 @@ async def precheck(state):
     tasks = {kind: {"task_id": prefix + ":" + kind, "kind": kind, "status": "PENDING"} for kind in kinds}
     return {"task_plan": tasks, "plan_id": prefix, "task_origin": raw,
             "task_events": [], "task_decisions": {}, "task_dispatches": 0,
-            'task_plan_version':3 if settings.multi_intent_simple_enabled else (2 if settings.multi_intent_context_v2_enabled else 1)}
+            'task_plan_version':4 if settings.multi_intent_shared_agent_enabled else (3 if settings.multi_intent_simple_enabled else (2 if settings.multi_intent_context_v2_enabled else 1))}
 
 
 async def plan(state):

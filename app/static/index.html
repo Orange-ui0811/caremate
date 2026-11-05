@@ -454,10 +454,12 @@
           btn.textContent = "建工单";
           // 点「建工单」不再直接建单,而是弹出工单表单让用户选类别+填描述再提交
           btn.addEventListener("click", () => openTicketModal(btn));
+          if (a.resume) btn.queueResume = a.resume;
         } else if (a.type === "refund_form") {
           btn.textContent = "提交退款工单";
           // ch06:能退时 Agent 调 submit_refund 被拦成此动作,点开退款表单(订单号只读+原因下拉)
           btn.addEventListener("click", () => openRefundModal(btn, a.draft || {}));
+          if (a.resume) btn.queueResume = a.resume;
         }
         bar.appendChild(btn);
       }
@@ -475,6 +477,7 @@
     let ticketConversationId = null;
     const formRequestIds = new WeakMap();
     function formRequestId(button, args) {
+      if (button?.queueResume) return button.queueResume.request_id;
       let keys = formRequestIds.get(button);
       if (!keys) { keys = new Map(); formRequestIds.set(button, keys); }
       const key = JSON.stringify(args);
@@ -525,10 +528,12 @@
         });
         const data = await resp.json();
         if (resp.ok) {
+          const continuation = ticketTriggerBtn?.queueResume;
           if (ticketTriggerBtn) ticketTriggerBtn.disabled = true;  // 建成后该气泡的按钮置灰
           closeTicketModal();
           addRow("bot").textContent = "工单已创建:" + data.ticket_no;
           messagesEl.scrollTop = messagesEl.scrollHeight;
+          if (continuation) await resumeTaskCard(bubbleForCard(continuation), {...continuation, confirmed: true});
         } else {
           ticketErr.textContent = typeof data.detail === "string" ? data.detail : "工单创建失败,请稍后重试";
           ticketSubmit.disabled = false;
@@ -582,10 +587,12 @@
         });
         const data = await resp.json();
         if (resp.ok) {
+          const continuation = refundTriggerBtn?.queueResume;
           if (refundTriggerBtn) refundTriggerBtn.disabled = true;
           closeRefundModal();
           addRow("bot").textContent = "退款申请已提交:" + data.ticket_no;
           messagesEl.scrollTop = messagesEl.scrollHeight;
+          if (continuation) await resumeTaskCard(bubbleForCard(continuation), {...continuation, confirmed: true});
         } else {
           refundErr.textContent = typeof data.detail === "string" ? data.detail : "退款提交失败,请稍后重试";
           refundSubmit.disabled = false;
@@ -721,7 +728,8 @@
           const payload = line.slice(6);
           if (payload === "[DONE]") return;
           const data = JSON.parse(payload);
-          if (data.event === "task_event") on.task_event && on.task_event(data);
+          if (data.event === 'task_start') on.task_start && on.task_start(data);
+          else if (data.event === "task_event") on.task_event && on.task_event(data);
           else if (data.event === "tool") on.tool && on.tool(data.name);
           else if (data.event === "activity") on.activity && on.activity(data);
           else if (data.event === "citations") on.citations && on.citations(data.items || []);
@@ -751,6 +759,11 @@
         ? (activity.name === "retrieve_policy" ? "已检索退换货政策" : "已检索知识库")
         : "已调用 " + activity.name;
       badgesEl.appendChild(badge);
+    }
+
+    function bubbleForCard(data) {
+      return [...messagesEl.querySelectorAll('.workflow-controls')].find(c=>c.dataset.interruptId===data.interrupt_id)
+        || document.createElement('div');
     }
 
     async function resumeTaskCard(card, body) {
@@ -813,6 +826,13 @@
       if (data.kind==='task_actions') { renderTaskActions(bubble,data);return; }
       const controls=document.createElement('div');controls.className='workflow-controls';
       controls.dataset.interruptId=data.interrupt_id;bubble.appendChild(controls);
+      if (data.kind==='task_form') {
+        const continuation={conversation_id:data.conversation_id,interrupt_id:data.interrupt_id,request_id:data.request_id};
+        renderActions(controls,[{...data.form,resume:continuation}]);
+        const cancel=document.createElement('button');cancel.className='btn';cancel.textContent='取消本项，继续其他事项';
+        cancel.onclick=()=>resumeTaskCard(controls,{...continuation,confirmed:false});controls.appendChild(cancel);
+        return;
+      }
       if (data.kind==='confirm_ticket') renderTicketConfirm(controls,data.preview || {},data);
       else {renderOrderCards(controls,data.orders || [],order=>pickThenResume(order,data),data.selection_prompt);addCancelOrder(controls,data);}
     }
@@ -875,6 +895,13 @@
       }
       const resp = await doFetch();
       await readSSEStream(resp, {
+        task_start: () => {
+          if (textStarted) {
+            if (citations.length) decorateCitations(textEl,citations);
+            addFeedbackBar(bubble);bubble=addRow('bot');
+            structured=false;textStarted=false;raw='';badgesEl=null;textEl=null;citations=[];actions=[];
+          }
+        },
         task_event: data => {
           if (data.internal) return;
           if (!structured) { bubble.innerHTML = ''; structured = true; }

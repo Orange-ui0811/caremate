@@ -51,7 +51,7 @@ def _legacy_recall_text(state, *, visible_messages=()) -> str:
         if settings.context_legacy_recall_mode == "all_visible_neighbors":
             from app.core.history_recall import dialogue_supplement, persistent_ids
             visible_ids = persistent_ids(visible_messages)
-            if state.get('task_plan_version') == 3:
+            if state.get('task_plan_version') in {3,4}:
                 # Replies emitted before an interrupt belong to this ongoing
                 # turn, not the prior-dialogue recall watermark.
                 visible_ids = [mid for mid in visible_ids if mid <= state.get('current_message_id', 0)]
@@ -329,6 +329,8 @@ def _turn_context(state, *, visible_messages=()) -> str:
     顺序不能反:REFUND_JUDGE_HINT 的措辞是「下面给出该订单数据与检索到的退换货政策证据」,
     它假设证据已在前文给过。"""
     from app.graph.business_evidence import evidence_instruction
+    from app.graph import task_queue
+    queued = task_queue.current(state)
     parts = []
     ss = None if context_runtime.enabled() else memory.summary_system(state.get("summary"))
     if ss is not None:
@@ -337,14 +339,20 @@ def _turn_context(state, *, visible_messages=()) -> str:
     if supplement:
         parts.append("\n\n" + supplement)
     parts.append("\n\n## 本轮用户请求(本轮任务边界)\n"
-                 + json.dumps(_user_text(state), ensure_ascii=False)
+                 + json.dumps(_effective_query(state) if queued else _user_text(state), ensure_ascii=False)
                  + "\n仅处理这条请求；历史用于理解背景和指代，不是待办列表。"
                    "除非本轮明确要求继续、重试或回顾，不要补答历史问题或为其调用工具。\n")
     if state.get("evidence"):
         parts.append(_KNOWLEDGE_EVIDENCE_HINT + state["evidence"])
     if state.get("route") == "refund_flow":
-        parts.append(REFUND_JUDGE_HINT + json.dumps(state.get("order_data", {}), ensure_ascii=False))
+        hint = REFUND_JUDGE_HINT
+        if queued and queued['action'] == 'consult':
+            hint = ('\n\n## 当前任务为退货咨询\n依据订单数据和政策说明适用条件及尚待核实的信息，'
+                    '本任务没有办理授权，不调用submit_refund或create_ticket。\n## 订单数据\n')
+        parts.append(hint + json.dumps(state.get("order_data", {}), ensure_ascii=False))
     parts.append(evidence_instruction(state))
+    if queued:
+        parts.append('\n\n## 当前队列任务\n' + task_queue.instruction(state))
     return "".join(parts)
 
 
@@ -367,6 +375,31 @@ def _with_turn_context(window: list, turn_ctx: str) -> list:
 
 
 def _agent_messages(state, *, tool_schemas=None) -> list:
+    messages=_base_agent_messages(state,tool_schemas=tool_schemas)
+    from app.graph import task_queue
+    scope=task_queue.current(state)
+    # Keep the original prompt, history selection, summary, recalls and receipts.
+    # This is a task parameter, not a replacement history or answer prompt.
+    if scope:
+        messages[0]=SystemMessage(messages[0].content+'\n\n## 当前队列任务边界\n'
+            '本轮已拆成任务队列。本轮材料中的「当前队列任务」是本次唯一执行目标，'
+            '完整用户原话和之前任务结果仅供理解背景。保持原有客服回复和工具确认方式。'
+            '其他排队事项将自动继续，不邀请用户再次发问。工单必填信息已明确时通过原工具展示确认卡片，'
+            '不增加重复的口头确认。')
+        # The original builder inserts turn materials after the real user turn.
+        # A queue needs those same materials AFTER previous task replies and
+        # BEFORE this task's ReAct suffix; otherwise the last sibling reply
+        # appears to be the latest instruction. No history or message ID changes.
+        material=next((m for m in messages if getattr(m,'id',None)==TURN_CTX_ID),None)
+        if material is not None:
+            messages=[m for m in messages if getattr(m,'id',None)!=TURN_CTX_ID]
+            suffix_ids={m.id for m in state.get('messages',[])[state.get('queue_start',0):] if m.id}
+            index=next((i for i,m in enumerate(messages) if getattr(m,'id',None) in suffix_ids),len(messages))
+            messages.insert(index,material)
+    return messages
+
+
+def _base_agent_messages(state, *, tool_schemas=None) -> list:
     """拼装顺序固定(ch07):人设+红线 system → 滑窗原文 → 摘要与本轮材料(紧跟用户那句)。
 
     整条消息列表里**只有一条 SystemMessage**,内容恒为 AGENT_SYSTEM。这不是洁癖:
@@ -476,6 +509,13 @@ async def agent_tools(state) -> dict:
     范式);参数缺则交引擎按「校验拦下」回灌,模型自然向用户追问,不弹卡。
     submit_refund 仍拦成前端退款表单(ch06 语义不变)。"""
     last = state["messages"][-1]
+    from app.graph import task_queue
+    queued=task_queue.current(state)
+    if queued and any((tc['name'] in {'create_ticket','submit_refund'} and queued['action']!='request') or
+                      (tc['name']=='submit_refund' and queued['intent']!='退款退货') or
+                      (tc['name']=='create_ticket' and queued['intent'] not in {'人工','投诉','售后'}) for tc in last.tool_calls):
+        return {'messages':[ToolMessage(content='该操作不属于当前任务授权范围。请只处理当前任务，其他办理诉求由后续任务处理。',
+            tool_call_id=tc['id'],name=tc['name'],status='error') for tc in last.tool_calls]}
     if state.get('task_scope'):
         from app.graph.read_subflows import denied_call
         violations = [denied_call(state, tc) for tc in last.tool_calls]
@@ -488,6 +528,7 @@ async def agent_tools(state) -> dict:
     specs = {s.name: s for s in await registry.get_all_specs()}   # ch08:执行侧同样现拉
     source_kwargs = ({"message_watermark": state.get("current_message_id")}
                      if context_runtime.enabled() else {})
+    if queued:source_kwargs['operation_id']=queued['task_id']+':write'
     if context_runtime.enabled() and settings.context_recovery_tools_enabled:
         from app.tools.context import get_context_specs
         specs.update({s.name: s for s in get_context_specs(state.get("current_message_id"))})
@@ -509,6 +550,10 @@ async def agent_tools(state) -> dict:
     actions = list(state.get("suggested_actions", []))
     not_owned = False        # 这一轮有没有人报了不属于自己的订单号
     for tc in last.tool_calls:
+        cached=task_queue.cached_read(state,tc,specs.get(tc['name']))
+        if cached is not None:
+            tool_msgs.append(cached)
+            continue
         if tc["name"] in ("create_ticket", "submit_refund"):
             denial = await context_runtime.write_denial(state, tc["name"], tc.get("args") or {})
             if denial:
